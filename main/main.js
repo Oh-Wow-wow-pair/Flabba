@@ -13,7 +13,7 @@ function createPetWindow() {
     frame: false,
     transparent: true,
     resizable: false,
-    alwaysOnTop: true,
+    alwaysOnTop: false, // 讓桌寵不會覆蓋其他應用程式
     hasShadow: false,
     skipTaskbar: true,
     webPreferences: {
@@ -21,9 +21,9 @@ function createPetWindow() {
       contextIsolation: true
     }
   });
-  petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  
+  petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
   petWindow.loadFile(path.join(__dirname, '../renderer/pet/index.html'));
-  // Default to click-through; renderer will temporarily disable this on hover
   petWindow.setIgnoreMouseEvents(true, { forward: true });
 }
 
