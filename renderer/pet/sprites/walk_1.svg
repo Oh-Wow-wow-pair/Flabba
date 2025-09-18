@@ -1,0 +1,12 @@
+<svg width="128" height="128" xmlns="http://www.w3.org/2000/svg">
+  <!-- 移動狀態 1 - 向左看 -->
+  <ellipse cx="64" cy="64" rx="50" ry="45" fill="#FFB6C1" stroke="#FF69B4" stroke-width="3"/>
+  <circle cx="45" cy="50" r="8" fill="white"/>
+  <circle cx="73" cy="50" r="8" fill="white"/>
+  <circle cx="43" cy="50" r="4" fill="black"/>
+  <circle cx="71" cy="50" r="4" fill="black"/>
+  <path d="M 48 75 Q 64 82 80 75" stroke="#FF1493" stroke-width="2" fill="none"/>
+  <!-- 移動時的腮紅 -->
+  <circle cx="30" cy="65" r="8" fill="#FFB6C1" opacity="0.8"/>
+  <circle cx="98" cy="65" r="8" fill="#FFB6C1" opacity="0.8"/>
+</svg>

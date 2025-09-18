@@ -6,8 +6,8 @@ let petWindow, chatWindow;
 
 function createPetWindow() {
   petWindow = new BrowserWindow({
-    width: 256,
-    height: 256,
+    width: 128,
+    height: 128,
     x: 100,
     y: 100,
     frame: false,
@@ -25,7 +25,7 @@ function createPetWindow() {
   
   petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
   petWindow.loadFile(path.join(__dirname, '../renderer/pet/index.html'));
-  petWindow.setIgnoreMouseEvents(true, { forward: true });
+  // 不要預設忽略滑鼠事件，讓桌寵可以互動
 }
 
 function createChatWindow() {

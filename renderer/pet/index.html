@@ -1,108 +1,244 @@
-
 <!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
   <style>
-    html, body { margin:0; padding:0; background:transparent; overflow:hidden; }
-    canvas { display:block; }
-    #hit { position:fixed; inset:0; }
+    html, body { 
+      margin: 0; 
+      padding: 0; 
+      background: transparent; 
+      overflow: hidden;
+      width: 128px;
+      height: 128px;
+    }
+    
+    #pet {
+      position: absolute;
+      width: 100px;
+      height: 100px;
+      top: 14px;
+      left: 14px;
+      transition: transform 0.1s ease-out;
+    }
+    
+    #pet-sprite {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      image-rendering: pixelated;
+      pointer-events: none; /* 防止圖片被拖拽 */
+      user-select: none; /* 防止選取 */
+      -webkit-user-drag: none; /* 防止拖拽 */
+    }
+    
+    .bounce {
+      transform: scale(1.2) !important;
+    }
   </style>
 </head>
 <body>
-  <div id="hit"></div>
-  <script type="module">
-    // three.js via CDN for quick MVP
-    import * as THREE from 'https://unpkg.com/three@0.165.0/build/three.module.js';
-
-    const { electronAPI } = window;
-
-    // Scene
-    const scene = new THREE.Scene();
-    const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
-    renderer.setClearColor(0x000000, 0); // fully transparent
-    renderer.setSize(256, 256);
-    document.body.appendChild(renderer.domElement);
-
-    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-    camera.position.set(0, 0.6, 2);
-
-    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-    const dir = new THREE.DirectionalLight(0xffffff, 1.0);
-    dir.position.set(1,2,3);
-    scene.add(dir);
-
-    // Pet mesh (cute sphere placeholder)
-    const pet = new THREE.Mesh(
-      new THREE.SphereGeometry(0.4, 32, 32),
-      new THREE.MeshStandardMaterial({ color: 0x50a0ff, metalness: 0.2, roughness: 0.4 })
-    );
-    scene.add(pet);
-
-    // Eyes
-    const eyeGeo = new THREE.SphereGeometry(0.05, 16, 16);
-    const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
-    const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
-    const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
-    eyeL.position.set(-0.12, 0.08, 0.38);
-    eyeR.position.set( 0.12, 0.08, 0.38);
-    scene.add(eyeL, eyeR);
-
-    // Idle animation - 使用 setInterval 確保即使被遮擋也能持續動畫
-    let t = 0;
-    function animate() {
-      t += 0.02;
-      pet.rotation.y += 0.01;
-      pet.position.y = Math.sin(t) * 0.03;
-      renderer.render(scene, camera);
+  <div id="pet">
+    <img id="pet-sprite" src="" alt="桌寵" />
+  </div>
+  
+  <script>
+    // PNG/SVG 圖檔配置 - 目前使用SVG，但支援PNG
+    const sprites = {
+      idle: ['sprites/idle_1.svg', 'sprites/idle_2.svg'],
+      walk: ['sprites/walk_1.svg', 'sprites/walk_1.svg'],
+      bounce: ['sprites/bounce_1.svg'],
+      sleep: ['sprites/idle_2.svg']
+    };
+    
+    // 如果有PNG檔案，會優先使用PNG
+    const pngSprites = {
+      idle: ['sprites/idle_1.png', 'sprites/idle_2.png'],
+      walk: ['sprites/walk_1.png', 'sprites/walk_2.png'],
+      bounce: ['sprites/bounce_1.png'],
+      sleep: ['sprites/sleep_1.png']
+    };
+    
+    // 最終備用 - 內建SVG
+    const defaultSprite = 'data:image/svg+xml;base64,' + btoa(`
+      <svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="40" fill="#ff6b6b" stroke="#fff" stroke-width="3"/>
+        <circle cx="38" cy="40" r="6" fill="white"/>
+        <circle cx="62" cy="40" r="6" fill="white"/>
+        <circle cx="38" cy="40" r="3" fill="black"/>
+        <circle cx="62" cy="40" r="3" fill="black"/>
+        <path d="M 35 60 Q 50 70 65 60" stroke="#fff" stroke-width="2" fill="none"/>
+      </svg>
+    `);
+    
+    let currentState = 'walk';
+    let animationFrame = 0;
+    let lastFrameTime = Date.now();
+    const petSprite = document.getElementById('pet-sprite');
+    const petElement = document.getElementById('pet');
+    
+    // 移動邏輯（基於成功的簡單版本）
+    let x = 100, y = 100;
+    let vx = 3, vy = 2;
+    let dragging = false;
+    
+    function loadSprite(spritePath, fallbackPath, finalFallback) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(spritePath);
+        img.onerror = () => {
+          if (fallbackPath) {
+            const fallbackImg = new Image();
+            fallbackImg.onload = () => resolve(fallbackPath);
+            fallbackImg.onerror = () => resolve(finalFallback);
+            fallbackImg.src = fallbackPath;
+          } else {
+            resolve(finalFallback);
+          }
+        };
+        img.src = spritePath;
+      });
     }
     
-    // 使用 setInterval 而不是 requestAnimationFrame，確保動畫不會被暫停
-    setInterval(animate, 16); // 約 60 FPS
-
-    // Window move/bounce logic
-    const WIN = { w: 256, h: 256 };
-    let vx = 1.8, vy = 1.4;
-    let x = 100, y = 100;
-    let dragging = false, offX = 0, offY = 0;
-    let bounds = { xMin: 0, yMin: 0, xMax: 1200, yMax: 800 };
-
-    electronAPI.getDisplays().then(info => {
-      const primary = info.displays.find(d => d.id === info.primary) || info.displays[0];
-      const wa = primary.workArea;
-      bounds = { xMin: wa.x, yMin: wa.y, xMax: wa.x + wa.width - WIN.w, yMax: wa.y + wa.height - WIN.h };
-    }).catch(()=>{});
-
-    function stepMove() {
-      if (!dragging) {
-        x += vx; y += vy;
-        if (x <= bounds.xMin || x >= bounds.xMax) vx *= -1;
-        if (y <= bounds.yMin || y >= bounds.yMax) vy *= -1;
-        x = Math.max(bounds.xMin, Math.min(bounds.xMax, x));
-        y = Math.max(bounds.yMin, Math.min(bounds.yMax, y));
-        electronAPI.moveWindow(x, y);
+    async function updateSprite() {
+      const stateSprites = sprites[currentState] || sprites.idle;
+      const pngStateSprites = pngSprites[currentState] || pngSprites.idle;
+      
+      const spriteIndex = animationFrame % stateSprites.length;
+      const svgSprite = stateSprites[spriteIndex];
+      const pngSprite = pngStateSprites[spriteIndex];
+      
+      // 先嘗試載入PNG，如果失敗則使用SVG
+      const finalSprite = await loadSprite(pngSprite, svgSprite, defaultSprite);
+      petSprite.src = finalSprite;
+    }
+    
+    function setPetState(newState) {
+      currentState = newState;
+      animationFrame = 0;
+      updateSprite();
+    }
+    
+    function animateFrames() {
+      const now = Date.now();
+      if (now - lastFrameTime > 400) { // 每400ms切換一幀
+        animationFrame++;
+        lastFrameTime = now;
+        updateSprite();
       }
     }
     
-    // 使用 setInterval 確保移動邏輯不會被暫停
-    setInterval(stepMove, 33); // 約 30 FPS 的移動更新
-
-    // Mouse interactions
-    const hit = document.getElementById('hit');
-    hit.addEventListener('mouseenter', () => electronAPI.setMouseThrough(false));
-    hit.addEventListener('mouseleave', () => { if (!dragging) electronAPI.setMouseThrough(true); });
-    hit.addEventListener('mousedown', (e) => { dragging = true; offX = e.clientX; offY = e.clientY; });
-    window.addEventListener('mouseup', () => { dragging = false; electronAPI.setMouseThrough(true); });
-    window.addEventListener('mousemove', (e) => {
-      if (!dragging) return;
-      x += (e.clientX - offX);
-      y += (e.clientY - offY);
-      offX = e.clientX; offY = e.clientY;
-      x = Math.max(bounds.xMin, Math.min(bounds.xMax, x));
-      y = Math.max(bounds.yMin, Math.min(bounds.yMax, y));
-      electronAPI.moveWindow(x, y);
+    function move() {
+      if (dragging) return;
+      
+      x += vx;
+      y += vy;
+      
+      let bounced = false;
+      // 簡單的邊界檢測
+      if (x < 0 || x > 1200) { 
+        vx = -vx; 
+        bounced = true; 
+      }
+      if (y < 0 || y > 800) { 
+        vy = -vy; 
+        bounced = true; 
+      }
+      
+      // 使用electronAPI移動視窗
+      if (window.electronAPI) {
+        window.electronAPI.moveWindow(x, y);
+      }
+      
+      if (bounced) {
+        petElement.classList.add('bounce');
+        setPetState('bounce');
+        setTimeout(() => {
+          petElement.classList.remove('bounce');
+          setPetState('walk');
+        }, 300);
+      }
+    }
+    
+    // 滑鼠互動
+    petElement.addEventListener('mouseenter', () => {
+      if (window.electronAPI) {
+        window.electronAPI.setMouseThrough(false);
+      }
+      setPetState('idle');
     });
-    hit.addEventListener('dblclick', () => electronAPI.toggleChat());
+    
+    petElement.addEventListener('mouseleave', () => {
+      if (!dragging && window.electronAPI) {
+        window.electronAPI.setMouseThrough(true);
+        setPetState('walk');
+      }
+    });
+    
+    let mouseStartX, mouseStartY;
+    petElement.addEventListener('mousedown', (e) => {
+      e.preventDefault(); // 防止預設拖拽行為
+      dragging = true;
+      mouseStartX = e.clientX;
+      mouseStartY = e.clientY;
+      setPetState('idle');
+    });
+    
+    // 防止圖片拖拽
+    petSprite.addEventListener('dragstart', (e) => {
+      e.preventDefault();
+      return false;
+    });
+    
+    petSprite.addEventListener('selectstart', (e) => {
+      e.preventDefault();
+      return false;
+    });
+    
+    window.addEventListener('mouseup', () => {
+      if (dragging) {
+        dragging = false;
+        if (window.electronAPI) {
+          window.electronAPI.setMouseThrough(true);
+        }
+        setPetState('walk');
+      }
+    });
+    
+    window.addEventListener('mousemove', (e) => {
+      if (dragging) {
+        const deltaX = e.clientX - mouseStartX;
+        const deltaY = e.clientY - mouseStartY;
+        x += deltaX;
+        y += deltaY;
+        mouseStartX = e.clientX;
+        mouseStartY = e.clientY;
+        
+        if (window.electronAPI) {
+          window.electronAPI.moveWindow(x, y);
+        }
+      }
+    });
+    
+    petElement.addEventListener('dblclick', () => {
+      if (window.electronAPI) {
+        window.electronAPI.toggleChat();
+      }
+      setPetState('bounce');
+      setTimeout(() => setPetState('walk'), 500);
+    });
+    
+    // 啟動
+    setTimeout(() => {
+      if (window.electronAPI) {
+        console.log('Starting PNG pet...');
+        setPetState('walk');
+        setInterval(move, 50); // 移動更新
+        setInterval(animateFrames, 100); // 動畫更新
+      } else {
+        console.error('electronAPI not found');
+        petSprite.src = defaultSprite;
+      }
+    }, 500);
   </script>
 </body>
 </html>

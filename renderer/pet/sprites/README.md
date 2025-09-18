@@ -1,0 +1,15 @@
+# 桌寵圖檔說明
+
+## 圖檔命名規則
+- idle_1.png, idle_2.png, idle_3.png - 待機動畫
+- walk_1.png, walk_2.png, walk_3.png - 移動動畫  
+- bounce_1.png, bounce_2.png - 彈跳動畫
+- sleep_1.png, sleep_2.png - 睡覺動畫
+
+## 圖檔要求
+- 尺寸：建議 128x128 或 256x256 像素
+- 格式：PNG（支援透明背景）
+- 背景：透明背景最佳
+
+## 目前範例
+放入你自己的 PNG 圖檔到這個資料夾，程式會自動載入並使用。
