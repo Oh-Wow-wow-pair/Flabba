@@ -1,5 +1,5 @@
 
-const { app, BrowserWindow, screen, ipcMain } = require('electron');
+const { app, BrowserWindow, screen, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
 
 let petWindow, chatWindow;
@@ -13,19 +13,28 @@ function createPetWindow() {
     frame: false,
     transparent: true,
     resizable: false,
-    alwaysOnTop: false, // 讓桌寵不會覆蓋其他應用程式
+    alwaysOnTop: false, 
     hasShadow: false,
     skipTaskbar: true,
+    focusable: true,
+    acceptFirstMouse: true, // macOS: 允許第一次點擊就啟動
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true,
-      backgroundThrottling: false // 防止背景時降低渲染頻率
+      backgroundThrottling: false
     }
   });
   
   petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
   petWindow.loadFile(path.join(__dirname, '../renderer/pet/index.html'));
-  // 不要預設忽略滑鼠事件，讓桌寵可以互動
+  
+  // 啟動時強制獲得焦點
+  petWindow.once('ready-to-show', () => {
+    petWindow.show();
+    petWindow.focus();
+  });
+  
+  // 移除自動重新獲得焦點的邏輯，改為提供手動方式
 }
 
 function createChatWindow() {
@@ -60,6 +69,22 @@ function toggleChatWindow() {
 app.whenReady().then(() => {
   createPetWindow();
   createChatWindow();
+  
+  // 註冊全域快捷鍵：Esc 來重新啟動桌寵焦點
+  globalShortcut.register('Escape', () => {
+    if (petWindow && !petWindow.isDestroyed()) {
+      petWindow.show();
+      petWindow.focus();
+      petWindow.setIgnoreMouseEvents(false); // 暫時禁用滑鼠穿透
+      
+      // 發送訊息給前端重置拖拽狀態
+      petWindow.webContents.send('reset-drag-state');
+      
+      setTimeout(() => {
+        petWindow.setIgnoreMouseEvents(true, { forward: true });
+      }, 1000);
+    }
+  });
 });
 
 // IPC handlers
@@ -76,8 +101,48 @@ ipcMain.handle('move-window', (_e, { x, y }) => {
   if (petWindow) petWindow.setPosition(Math.round(x), Math.round(y), false);
 });
 
+ipcMain.handle('get-current-position', () => {
+  if (petWindow) {
+    const [x, y] = petWindow.getPosition();
+    return { x, y };
+  }
+  return { x: 0, y: 0 };
+});
+
 ipcMain.handle('toggle-mouse-through', (_e, ignore) => {
-  if (petWindow) petWindow.setIgnoreMouseEvents(!!ignore, { forward: true });
+  if (petWindow) {
+    if (ignore) {
+      // 啟用滑鼠穿透 - 立即設置，不等待
+      petWindow.setIgnoreMouseEvents(true, { forward: true });
+    } else {
+      // 禁用滑鼠穿透 - 立即設置
+      petWindow.setIgnoreMouseEvents(false);
+      petWindow.focus(); // 確保視窗獲得焦點
+    }
+  }
+});
+
+// 新增：手動重新獲得焦點的方法
+ipcMain.handle('refocus-window', () => {
+  if (petWindow && !petWindow.isDestroyed()) {
+    petWindow.focus();
+    petWindow.show(); // 確保視窗可見
+    return true;
+  }
+  return false;
+});
+
+// 新增：重置視窗狀態的 IPC handler
+ipcMain.handle('reset-window-state', () => {
+  if (petWindow && process.platform === 'darwin') {
+    // 強制重新建立視窗的滑鼠事件狀態
+    petWindow.setAlwaysOnTop(false);
+    petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
+    
+    setTimeout(() => {
+      petWindow.setIgnoreMouseEvents(true, { forward: true });
+    }, 100);
+  }
 });
 
 ipcMain.handle('toggle-chat', () => toggleChatWindow());
@@ -90,6 +155,11 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (!petWindow) createPetWindow();
+});
+
+app.on('will-quit', () => {
+  // 清理全域快捷鍵
+  globalShortcut.unregisterAll();
 });
 
 // Helpful: log any unhandled rejections so the app doesn't crash silently
