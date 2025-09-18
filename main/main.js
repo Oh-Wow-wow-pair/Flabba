@@ -18,7 +18,8 @@ function createPetWindow() {
     skipTaskbar: true,
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
-      contextIsolation: true
+      contextIsolation: true,
+      backgroundThrottling: false // 防止背景時降低渲染頻率
     }
   });
   
