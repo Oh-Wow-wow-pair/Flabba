@@ -4,11 +4,15 @@
   "description": "Electron + Three.js desktop pet MVP (pet window + chat window)",
   "main": "main/main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dev": "nodemon --exec \"npm start\""
   },
   "author": "",
   "license": "MIT",
   "dependencies": {
     "electron": "^32.2.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
   }
 }
