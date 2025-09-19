@@ -1,53 +1,47 @@
-
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <style>
-    html, body { margin:0; background:rgba(30,30,30,0.78); color:#fff; font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-    .wrap { padding:10px; width:100%; height:100%; display:flex; flex-direction:column; }
-    .head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
-    .title { font-weight:600; }
-    .btn { background:#444; color:#fff; border:none; border-radius:8px; padding:6px 10px; cursor:pointer; }
-    .list { flex:1; overflow:auto; display:flex; flex-direction:column; gap:8px; }
-    .bubble { padding:8px 10px; border-radius:12px; background:#2a2a2a; max-width:80%; }
-    .me { align-self:flex-end; background:#2e7d32; }
-    .bar { display:flex; gap:6px; }
-    input { flex:1; padding:8px; border-radius:8px; border:none; }
-  </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Window</title>
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
+  <link rel="stylesheet" href="index.css">
 </head>
-<body>
-  <div class="wrap">
-    <div class="head">
-      <div class="title">新人小幫手</div>
-      <button class="btn" onclick="window.close()">✕</button>
+<body class="chat-window">
+  <section class="section chat-content">
+    <div class="content">
+      <h1 class="title">小助手</h1>
+      <hr>
     </div>
-    <div id="list" class="list">
-      <div class="bubble">嗨～我是你的桌面小幫手，雙擊寵物可以開/關我。問我「報到需要帶什麼？」試試看！</div>
+    <div class="fixed-grid has-4-cols">
+      <div class="grid" id="chat-list">
+        <div class="cell is-col-span-3">
+          <div class="notification is-primary bubble">
+            嗨～我是你的桌面小幫手，雙擊寵物可以開/關我。問我「報到需要帶什麼？」試試看！
+          </div>
+        </div>
+        <div class="cell"></div>
+        <!-- <div class="cell is-col-span-3 is-col-start-2">
+          <div class="notification bubble">
+            lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+          </div>
+        </div>
+        <div class="cell is-col-span-3">
+          <div class="notification is-warning is-light bubble">
+            Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+          </div>
+        </div>
+        <div class="cell"></div> -->
+      </div>
     </div>
-    <div class="bar">
-      <input id="q" placeholder="輸入問題..." />
-      <button id="send" class="btn">送出</button>
+  </section>
+  <section class="section input-bar">
+    <div class="field is-grouped">
+      <input id="chat-input" class="input is-rounded" type="text" placeholder="問問歐姆巴">
+      <button id="chat-send" class="button is-primary is-rounded">發送</button>
     </div>
-  </div>
-  <script>
-    const list = document.getElementById('list');
-    const q = document.getElementById('q');
-    function push(text, who='bot') {
-      const div = document.createElement('div');
-      div.className = 'bubble' + (who==='me' ? ' me' : '');
-      div.textContent = text;
-      list.appendChild(div);
-      list.scrollTop = list.scrollHeight;
-    }
-    document.getElementById('send').onclick = async () => {
-      const t = q.value.trim(); if (!t) return;
-      push(t, 'me'); q.value='';
-      // TODO: wire to your IPC API (chat:ask) if needed
-      await new Promise(r=>setTimeout(r, 200));
-      push('（示範回覆）報到需攜帶：身分證件、學歷證明、金融帳戶資訊等。園區 HR 櫃台位於…');
-    };
-    q.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('send').click(); });
-  </script>
+  </section>
+  <script src="index.js"></script>
 </body>
 </html>

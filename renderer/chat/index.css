@@ -1,0 +1,27 @@
+:root {
+    --bulma-primary-h: 49deg;
+    --bulma-primary-l: 74%;
+    --bulma-link-h: 49deg;
+    --bulma-link-l: 74%;
+}
+
+.section {
+    padding: 1.5rem;
+}
+
+.bubble {
+    padding: 1rem;
+    border-radius: 12px;
+}
+
+.chat-content {
+    padding-bottom: 5rem;
+}
+
+.input-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+}
