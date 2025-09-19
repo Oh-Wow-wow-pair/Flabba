@@ -1,0 +1,392 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    html, body { 
+      margin: 0; 
+      padding: 0; 
+      background: transparent; 
+      overflow: hidden;
+      width: 128px;
+      height: 128px;
+    }
+    
+    #pet {
+      position: absolute;
+      width: 100px;
+      height: 100px;
+      top: 14px;
+      left: 14px;
+      transition: transform 0.1s ease-out;
+    }
+    
+    #pet-sprite {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      image-rendering: pixelated;
+      pointer-events: none; /* 防止圖片被拖拽 */
+      user-select: none; /* 防止選取 */
+      -webkit-user-drag: none; /* 防止拖拽 */
+    }
+    
+    .bounce {
+      transform: scale(1.2) !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="pet">
+    <img id="pet-sprite" src="" alt="桌寵" />
+  </div>
+  
+  <script>
+    // PNG/SVG 圖檔配置 - 目前使用SVG，但支援PNG
+    const sprites = {
+      idle: ['sprites/idle_1.svg', 'sprites/idle_2.svg'],
+      walk: ['sprites/walk_1.svg', 'sprites/walk_1.svg'],
+      bounce: ['sprites/bounce_1.svg'],
+      sleep: ['sprites/idle_2.svg']
+    };
+    
+    // 如果有PNG檔案，會優先使用PNG
+    const pngSprites = {
+      idle: ['sprites/idle_1.png', 'sprites/idle_2.png'],
+      walk: ['sprites/walk_1.png', 'sprites/walk_1.png'],
+      bounce: ['sprites/bounce_1.png'],
+      sleep: ['sprites/idle_2.png']
+    };
+    
+    // 最終備用 - 內建SVG
+    const defaultSprite = 'data:image/svg+xml;base64,' + btoa(`
+      <svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="40" fill="#ff6b6b" stroke="#fff" stroke-width="3"/>
+        <circle cx="38" cy="40" r="6" fill="white"/>
+        <circle cx="62" cy="40" r="6" fill="white"/>
+        <circle cx="38" cy="40" r="3" fill="black"/>
+        <circle cx="62" cy="40" r="3" fill="black"/>
+        <path d="M 35 60 Q 50 70 65 60" stroke="#fff" stroke-width="2" fill="none"/>
+      </svg>
+    `);
+    
+    let currentState = 'walk';
+    let animationFrame = 0;
+    let lastFrameTime = Date.now();
+    const petSprite = document.getElementById('pet-sprite');
+    const petElement = document.getElementById('pet');
+    
+    // 移動邏輯（基於成功的簡單版本）
+    let x = 100, y = 100;
+    let vx = 3, vy = 2;
+    let dragging = false;
+    let lastInteractionTime = Date.now();
+    
+    function loadSprite(spritePath, fallbackPath, finalFallback) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(spritePath);
+        img.onerror = () => {
+          if (fallbackPath) {
+            const fallbackImg = new Image();
+            fallbackImg.onload = () => resolve(fallbackPath);
+            fallbackImg.onerror = () => resolve(finalFallback);
+            fallbackImg.src = fallbackPath;
+          } else {
+            resolve(finalFallback);
+          }
+        };
+        img.src = spritePath;
+      });
+    }
+    
+    async function updateSprite() {
+      const stateSprites = sprites[currentState] || sprites.idle;
+      const pngStateSprites = pngSprites[currentState] || pngSprites.idle;
+      
+      const spriteIndex = animationFrame % stateSprites.length;
+      const svgSprite = stateSprites[spriteIndex];
+      const pngSprite = pngStateSprites[spriteIndex];
+      
+      // 先嘗試載入PNG，如果失敗則使用SVG
+      const finalSprite = await loadSprite(pngSprite, svgSprite, defaultSprite);
+      petSprite.src = finalSprite;
+    }
+    
+    function setPetState(newState) {
+      currentState = newState;
+      animationFrame = 0;
+      updateSprite();
+    }
+    
+    function animateFrames() {
+      const now = Date.now();
+      if (now - lastFrameTime > 400) { // 每400ms切換一幀
+        animationFrame++;
+        lastFrameTime = now;
+        updateSprite();
+      }
+    }
+    
+    function move() {
+      if (dragging) return;
+      
+      x += vx;
+      y += vy;
+      
+      let bounced = false;
+      // 簡單的邊界檢測
+      if (x < 0 || x > 1200) { 
+        vx = -vx; 
+        bounced = true; 
+      }
+      if (y < 0 || y > 800) { 
+        vy = -vy; 
+        bounced = true; 
+      }
+      
+      // 使用electronAPI移動視窗
+      if (window.electronAPI) {
+        window.electronAPI.moveWindow(x, y);
+      }
+      
+      if (bounced) {
+        petElement.classList.add('bounce');
+        setPetState('bounce');
+        setTimeout(() => {
+          petElement.classList.remove('bounce');
+          setPetState('walk');
+        }, 300);
+      }
+    }
+    
+    // 滑鼠互動變數
+    let mouseStartX, mouseStartY;
+    let isMouseOver = false;
+    
+    // 滑鼠互動
+    petElement.addEventListener('mouseenter', () => {
+      console.log('Mouse enter pet');
+      isMouseOver = true;
+      if (window.electronAPI) {
+        window.electronAPI.setMouseThrough(false);
+      }
+      lastInteractionTime = Date.now();
+    });
+
+    petElement.addEventListener('mouseleave', () => {
+      console.log('Mouse leave pet');
+      isMouseOver = false;
+      // 只有在不拖拽時才啟用穿透
+      if (!dragging && window.electronAPI) {
+        window.electronAPI.setMouseThrough(true);
+        setPetState('walk');
+      }
+    });
+
+    // 拖拽開始事件 - 立即響應
+    petElement.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      console.log('Mouse down - starting drag');
+      
+      // 立即設置拖拽狀態
+      dragging = true;
+      window.lastDragStart = Date.now();
+      mouseStartX = e.clientX;
+      mouseStartY = e.clientY;
+      setPetState('idle');
+      
+      // 立即禁用滑鼠穿透
+      if (window.electronAPI) {
+        window.electronAPI.setMouseThrough(false);
+      }
+    });    // 防止圖片拖拽
+    petSprite.addEventListener('dragstart', (e) => {
+      e.preventDefault();
+      return false;
+    });
+    
+    petSprite.addEventListener('selectstart', (e) => {
+      e.preventDefault();
+      return false;
+    });
+    
+    // 節流的拖拽移動處理
+    let moveTimeout = null;
+    window.addEventListener('mousemove', (e) => {
+      if (dragging && mouseStartX !== undefined && mouseStartY !== undefined) {
+        const deltaX = e.clientX - mouseStartX;
+        const deltaY = e.clientY - mouseStartY;
+        
+        // 立即更新位置變數
+        x += deltaX;
+        y += deltaY;
+        mouseStartX = e.clientX;
+        mouseStartY = e.clientY;
+        
+        // 節流視窗移動請求
+        if (moveTimeout) {
+          clearTimeout(moveTimeout);
+        }
+        
+        moveTimeout = setTimeout(() => {
+          if (window.electronAPI) {
+            window.electronAPI.moveWindow(x, y);
+          }
+          moveTimeout = null;
+        }, 8); // 8ms 節流，約 120fps
+      }
+    });
+
+    // 快速響應的 mouseup 處理
+    window.addEventListener('mouseup', (e) => {
+      if (dragging) {
+        console.log('Mouse up - ending drag');
+        
+        // 立即重置拖拽狀態
+        dragging = false;
+        mouseStartX = undefined;
+        mouseStartY = undefined;
+        setPetState('walk');
+        
+        // 根據滑鼠位置決定穿透狀態
+        if (window.electronAPI) {
+          if (isMouseOver) {
+            // 滑鼠還在寵物上，保持可互動
+            window.electronAPI.setMouseThrough(false);
+          } else {
+            // 滑鼠不在寵物上，啟用穿透
+            window.electronAPI.setMouseThrough(true);
+          }
+        }
+      }
+    });
+
+    // 同時監聽 petElement 的 mouseup，確保快速點擊被捕獲
+    petElement.addEventListener('mouseup', (e) => {
+      if (dragging) {
+        console.log('Pet mouseup - ending drag');
+        
+        // 立即重置拖拽狀態
+        dragging = false;
+        mouseStartX = undefined;
+        mouseStartY = undefined;
+        setPetState('walk');
+        
+        // 滑鼠在寵物上，保持可互動
+        if (window.electronAPI) {
+          window.electronAPI.setMouseThrough(false);
+        }
+      }
+    });
+
+    // 視窗焦點處理
+    window.addEventListener('blur', () => {
+      if (dragging) {
+        dragging = false;
+        mouseStartX = undefined;
+        mouseStartY = undefined;
+        if (window.electronAPI) {
+          window.electronAPI.setMouseThrough(true);
+        }
+        setPetState('walk');
+      }
+    });
+
+    // 簡單的拖拽超時保護
+    setInterval(() => {
+      if (dragging && window.lastDragStart && (Date.now() - window.lastDragStart > 10000)) {
+        dragging = false;
+        mouseStartX = undefined;
+        mouseStartY = undefined;
+        if (window.electronAPI) {
+          window.electronAPI.setMouseThrough(true);
+        }
+        setPetState('walk');
+      }
+    }, 5000);
+
+    // 新增：全域滑鼠監聽，防止滑鼠事件丟失
+    document.addEventListener('mouseenter', () => {
+      console.log('Document mouse enter');
+    });
+    
+    document.addEventListener('mouseleave', () => {
+      console.log('Document mouse leave');
+      // 如果滑鼠完全離開視窗區域，確保穿透狀態正確
+      if (!dragging && window.electronAPI) {
+        setTimeout(() => {
+          if (!dragging) {
+            window.electronAPI.setMouseThrough(true);
+          }
+        }, 100);
+      }
+    });
+    
+    petElement.addEventListener('dblclick', () => {
+      if (window.electronAPI) {
+        window.electronAPI.toggleChat();
+      }
+      setPetState('bounce');
+      setTimeout(() => setPetState('walk'), 500);
+    });
+    
+    // 右鍵點擊重新獲得焦點（解決拖拽失效問題）
+    petElement.addEventListener('contextmenu', (e) => {
+      e.preventDefault(); // 防止顯示預設右鍵菜單
+      console.log('Right click - attempting to refocus window');
+      if (window.electronAPI && window.electronAPI.refocusWindow) {
+        window.electronAPI.refocusWindow().then(success => {
+          if (success) {
+            console.log('Window refocused successfully');
+            // 重新啟用滑鼠互動
+            setTimeout(() => {
+              if (window.electronAPI) {
+                window.electronAPI.setMouseThrough(true);
+              }
+            }, 100);
+          }
+        });
+      }
+      
+      // 視覺反饋
+      petElement.classList.add('bounce');
+      setPetState('bounce');
+      setTimeout(() => {
+        petElement.classList.remove('bounce');
+        setPetState('walk');
+      }, 300);
+    });
+    
+    // 啟動
+    setTimeout(() => {
+      if (window.electronAPI) {
+        console.log('Starting PNG pet...');
+        console.log('🔥 小提示：如果拖拽失效，按 Esc 鍵重新啟動桌寵焦點！');
+        setPetState('walk');
+        setInterval(move, 50); // 移動更新
+        setInterval(animateFrames, 100); // 動畫更新
+        
+        // 初始化滑鼠穿透狀態
+        window.electronAPI.setMouseThrough(true);
+        
+        // 監聽主進程的拖拽重置訊息
+        if (window.electronAPI.onResetDragState) {
+          window.electronAPI.onResetDragState(() => {
+            console.log('Received reset drag state command from main process');
+            if (dragging) {
+              dragging = false;
+              setPetState('walk');
+            }
+          });
+        }
+      } else {
+        console.error('electronAPI not found');
+        petSprite.src = defaultSprite;
+      }
+    }, 500);
+  </script>
+</body>
+</html>
