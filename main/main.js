@@ -39,30 +39,37 @@ function createPetWindow() {
 
 function createChatWindow() {
   chatWindow = new BrowserWindow({
-    width: 380,
-    height: 520,
+    width: 650,
+    height: 700,
     show: false,
     frame: false,
     resizable: false,
-    alwaysOnTop: true,
-    transparent: true,
+    skipTaskbar: true,
+    transparent: false,
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true
     }
   });
   chatWindow.loadFile(path.join(__dirname, '../renderer/chat/index.html'));
+
+  chatWindow.on('close', (event) => {
+    event.preventDefault();
+    chatWindow.hide();
+  });
 }
 
 function toggleChatWindow() {
-  if (!chatWindow || !petWindow) return;
   if (chatWindow.isVisible()) {
-    chatWindow.hide();
-  } else {
-    const [x, y] = petWindow.getPosition();
-    chatWindow.setPosition(x + 140, y);
+    if (chatWindow.isFocused()) {
+      chatWindow.hide();
+    }
+    else {
+      chatWindow.focus();
+    }
+  }
+  else {
     chatWindow.show();
-    chatWindow.focus();
   }
 }
 
@@ -84,6 +91,10 @@ app.whenReady().then(() => {
         petWindow.setIgnoreMouseEvents(true, { forward: true });
       }, 1000);
     }
+  });
+
+  globalShortcut.register('Alt+P', () => {
+    toggleChatWindow();
   });
 });
 
