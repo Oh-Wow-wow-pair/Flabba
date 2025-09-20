@@ -9,7 +9,7 @@ let conversationID = '';
 const { watchFrontmostApp, isDesktopProcess } = require('./macFrontmost');
 const { time } = require('console');
 
-let petWindow, chatWindow, instachatWindow, infoWindow;
+let petWindow, chatWindow, instachatWindow, leaveWindow;
 let isPetPaused = false; // 追蹤桌寵暫停狀態
 let isContextMenuOpen = false; // 追蹤右鍵選單狀態
 let isAnyWindowOpen = false; // 追蹤是否有視窗開啟
@@ -273,13 +273,13 @@ function toggleInstachatWindow() {
   }
 }
 
-function createInfoWindow() {
-  if (infoWindow && !infoWindow.isDestroyed()) {
-    infoWindow.show();
-    infoWindow.focus();
+function createLeaveWindow() {
+  if (leaveWindow && !leaveWindow.isDestroyed()) {
+    leaveWindow.show();
+    leaveWindow.focus();
     return;
   }
-  infoWindow = new BrowserWindow({
+  leaveWindow = new BrowserWindow({
     width: 460,
     height: 800,
     show: false,
@@ -290,12 +290,12 @@ function createInfoWindow() {
       contextIsolation: true
     }
   });
-  infoWindow.loadFile(path.join(__dirname, '../renderer/info/index.html'));
-  infoWindow.once('ready-to-show', () => {
-    infoWindow.show();
-    infoWindow.focus();
+  leaveWindow.loadFile(path.join(__dirname, '../renderer/leave/index.html'));
+  leaveWindow.once('ready-to-show', () => {
+    leaveWindow.show();
+    leaveWindow.focus();
   });
-  infoWindow.on('closed', () => { infoWindow = null; });
+  leaveWindow.on('closed', () => { leaveWindow = null; });
 }
 
 function toggleChatWindow() {
@@ -386,12 +386,12 @@ async function messageToAi(message) {
     });
 }
 
-function toggleInfoWindow() {
-  if (infoWindow && !infoWindow.isDestroyed()) {
-    if (infoWindow.isVisible()) infoWindow.hide();
-    else { infoWindow.show(); infoWindow.focus(); }
+function toggleLeaveWindow() {
+  if (leaveWindow && !leaveWindow.isDestroyed()) {
+    if (leaveWindow.isVisible()) leaveWindow.hide();
+    else { leaveWindow.show(); leaveWindow.focus(); }
   } else {
-    createInfoWindow();
+    createLeaveWindow();
   }
 }
 
@@ -518,9 +518,9 @@ app.whenReady().then(() => {
     }
   });
 
-  // Cmd/Ctrl+Shift+L：切換請假介面（info）
+  // Cmd/Ctrl+Shift+L：切換請假介面（leave）
   globalShortcut.register('CommandOrControl+Shift+L', () => {
-    toggleInfoWindow();
+    toggleLeaveWindow();
   });
 
   // Alt+P：切換聊天視窗
