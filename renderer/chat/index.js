@@ -26,20 +26,20 @@ function appendMessage(message, fromUser = false) {
     cell.className = fromUser ? 'cell is-col-span-3 is-col-start-2' : 'cell is-col-span-3';
 
     const bubble = document.createElement('div');
-    bubble.className = fromUser ? 'notification bubble' : 'notification is-primary bubble';
-    bubble.textContent = message;
-    cell.appendChild(bubble);
+    bubble.className = fromUser ? 'notification bubble content' : 'notification is-primary bubble';
 
+    const inner = document.createElement('div');
+    inner.className = 'content';
+    inner.innerHTML = message; // Assuming message is already sanitized HTML
+
+    bubble.appendChild(inner);
+    cell.appendChild(bubble);
     list_div.appendChild(cell);
 
     if (!fromUser) {
-        deleteSkeleton();
         const emptyCell = document.createElement('div');
         emptyCell.className = 'cell';
         list_div.appendChild(emptyCell);
-    }
-    else {
-        appendSkeleton();
     }
 
     list_div.scrollTop = list_div.scrollHeight;
@@ -54,11 +54,21 @@ send_btn.addEventListener('click', async (event) => {
     appendMessage(userMessage, true);
     input_div.value = '';
 
-    // Simulate a response from the assistant
-    setTimeout(() => {
-        const assistantMessage = '這是回覆訊息的範例。';
-        appendMessage(assistantMessage, false);
-    }, 1500);
+    // Call Groq
+    appendSkeleton();
+    await window.electronAPI.messageToAi(userMessage)
+        .then((assistantMessage) => {
+            if (assistantMessage) {
+                console.log('Received assistant message:', assistantMessage);
+                deleteSkeleton();
+                appendMessage(assistantMessage, false);
+            }
+        })
+        .catch((err) => {
+            console.error('Error from Groq:', err);
+            deleteSkeleton();
+            appendMessage('抱歉，無法取得回覆。請稍後再試。', false);
+        });
 
     event.preventDefault();
 });

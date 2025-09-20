@@ -9,6 +9,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   resetWindowState: () => ipcRenderer.invoke('reset-window-state'),
   refocusWindow: () => ipcRenderer.invoke('refocus-window'),
   toggleChat: () => ipcRenderer.invoke('toggle-chat'),
+  messageToAi: async (message) => {
+    return await ipcRenderer.invoke('message-to-ai', message);
+  },
   showInstachatAtPet: () => ipcRenderer.invoke('show-instachat-at-pet'),
   
   // 新增：顯示原生右鍵選單

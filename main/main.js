@@ -1,5 +1,12 @@
 const { app, BrowserWindow, screen, ipcMain, globalShortcut, Notification, Menu, nativeImage } = require('electron');
 const path = require('path');
+const markdownit = require('markdown-it');
+const { getSingleStaff } = require('../db');
+require('dotenv').config();
+
+let petWindow, chatWindow, instachatWindow;
+let messageCount = 0;
+let conversationID = '';
 const { watchFrontmostApp, isDesktopProcess } = require('./macFrontmost');
 const { time } = require('console');
 
@@ -320,6 +327,66 @@ function toggleChatWindow() {
   }
 }
 
+async function generateQuery(staff, message) {
+  if (!staff) return '';
+
+  let query = '';
+
+  if (messageCount == 0) {
+    messageCount++;
+
+    query += `My name is ${staff.first_name} ${staff.last_name}, I work in the ${staff.dept_name} department as a ${staff.job_title}. My email is ${staff.email} and my phone number is ${staff.phone}. I was hired on ${staff.hire_date} and my current salary is $${staff.salary}. My employment status is ${staff.status}. Here is my question: `;
+  }
+
+  query += `${message}`;
+  return query;
+}
+
+async function messageToAi(message) {
+  let staff = await getSingleStaff('EMP001');
+  let query = await generateQuery(staff, message);
+
+  let body = {
+    inputs: {},
+    response_mode: 'blocking',
+    auto_generate_name: true,
+    user: 'flabba-pet',
+    query: query,
+    conversation_id: conversationID
+  };
+
+  console.log('Sending message to AI:', message);
+  console.log(body);
+
+  // DIFY API call
+  return await fetch('https://api.dify.ai/v1/chat-messages', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.DIFY_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    })
+    .catch((error) => {
+      console.error('Error during fetch:', error);
+    }) 
+    .then(response => response.json())
+    .then(data => {
+      // print the type of data
+      const md = markdownit({
+        html: true,
+        breaks: true,
+        linkify: true,
+        typographer: true,
+      });
+
+      conversationID = data.conversation_id;
+
+      console.log(md.render(data.answer));
+      return md.render(data.answer); // Converts markdown to HTML
+    });
+}
+
 function toggleInfoWindow() {
   if (infoWindow && !infoWindow.isDestroyed()) {
     if (infoWindow.isVisible()) infoWindow.hide();
@@ -577,6 +644,10 @@ ipcMain.handle('notify', (_event, payload) => {
     console.error('發送通知失敗:', err);
     return false;
   }
+});
+
+ipcMain.handle('message-to-ai', async (_e, message) => {
+  return await messageToAi(message);
 });
 
 // Keep app alive even if windows are hidden (typical for tray apps)

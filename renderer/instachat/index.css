@@ -59,8 +59,8 @@ body::-webkit-scrollbar,
 }
 
 #instachat-list {
-  max-height: 8rem;
-  overflow-y: auto;
+    max-height: 8rem;
+    overflow-y: auto;
 }
 
 .input-bar {

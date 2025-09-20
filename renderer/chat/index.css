@@ -24,6 +24,11 @@ body::-webkit-scrollbar,
     border-radius: 12px;
 }
 
+.grid {
+    max-height: 31rem;
+    overflow-y: auto;
+}
+
 .chat-content {
     padding-bottom: 5rem;
 }
