@@ -17,7 +17,7 @@ def print_response(response, title):
         result = response.json()
         print(f"Response: {json.dumps(result, indent=2, ensure_ascii=False)}")
         return result
-    except:
+    except ValueError:
         print(f"Response: {response.text}")
         return None
 
