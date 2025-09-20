@@ -4,7 +4,6 @@ const markdownit = require('markdown-it');
 const { getSingleStaff } = require('../db');
 require('dotenv').config();
 
-let petWindow, chatWindow, instachatWindow;
 let messageCount = 0;
 let conversationID = '';
 const { watchFrontmostApp, isDesktopProcess } = require('./macFrontmost');
