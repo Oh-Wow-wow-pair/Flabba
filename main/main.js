@@ -1,8 +1,7 @@
-
 const { app, BrowserWindow, screen, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
 
-let petWindow, chatWindow;
+let petWindow, chatWindow, infoWindow;
 
 function createPetWindow() {
   petWindow = new BrowserWindow({
@@ -54,6 +53,31 @@ function createChatWindow() {
   chatWindow.loadFile(path.join(__dirname, '../renderer/chat/index.html'));
 }
 
+function createInfoWindow() {
+  if (infoWindow && !infoWindow.isDestroyed()) {
+    infoWindow.show();
+    infoWindow.focus();
+    return;
+  }
+  infoWindow = new BrowserWindow({
+    width: 460,
+    height: 800,
+    show: false,
+    autoHideMenuBar: true,
+    backgroundColor: '#0f1115',
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/preload.js'),
+      contextIsolation: true
+    }
+  });
+  infoWindow.loadFile(path.join(__dirname, '../renderer/info/index.html'));
+  infoWindow.once('ready-to-show', () => {
+    infoWindow.show();
+    infoWindow.focus();
+  });
+  infoWindow.on('closed', () => { infoWindow = null; });
+}
+
 function toggleChatWindow() {
   if (!chatWindow || !petWindow) return;
   if (chatWindow.isVisible()) {
@@ -66,10 +90,20 @@ function toggleChatWindow() {
   }
 }
 
+function toggleInfoWindow() {
+  if (infoWindow && !infoWindow.isDestroyed()) {
+    if (infoWindow.isVisible()) infoWindow.hide();
+    else { infoWindow.show(); infoWindow.focus(); }
+  } else {
+    createInfoWindow();
+  }
+}
+
 app.whenReady().then(() => {
   createPetWindow();
   createChatWindow();
-  
+  // createInfoWindow(); // 若不想一啟動就顯示，移除原本的 createInfoWindow() 呼叫
+
   // 註冊全域快捷鍵：Esc 來重新啟動桌寵焦點
   globalShortcut.register('Escape', () => {
     if (petWindow && !petWindow.isDestroyed()) {
@@ -84,6 +118,11 @@ app.whenReady().then(() => {
         petWindow.setIgnoreMouseEvents(true, { forward: true });
       }, 1000);
     }
+  });
+
+  // 改用 Cmd+Shift+L 切換 info 視窗
+  globalShortcut.register('CommandOrControl+Shift+L', () => {
+    toggleInfoWindow();
   });
 });
 
