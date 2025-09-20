@@ -381,13 +381,11 @@ def frontend_get_user_summary(user_id):
             'error': str(e)
         }), 500
 
-# === WebSocket 通知 (可選) ===
 def notify_frontend(user_id, updated_data):
     """
     可選：當資料更新時通知前端
     可以透過 WebSocket 或者前端定期輪詢
     """
-    # 這裡可以實作 WebSocket 或其他即時通知機制
     logger.info(f"Would notify frontend about data update for {user_id}")
     pass
 
