@@ -22,5 +22,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdatePauseState: (callback) => ipcRenderer.on('update-pause-state', callback), // 新增
   onFocusChanged: (callback) => ipcRenderer.on('focus-changed', callback),
   onDesktopFocused: (callback) => ipcRenderer.on('desktop-focused', callback),
-  onContextMenuClosed: (callback) => ipcRenderer.on('context-menu-closed', callback)
+  onContextMenuClosed: (callback) => ipcRenderer.on('context-menu-closed', callback),
+  notify: (payload) => ipcRenderer.invoke('notify', payload),
 });
