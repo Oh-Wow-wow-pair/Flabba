@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   moveWindow: (x, y) => ipcRenderer.invoke('move-window', { x, y }),
   getCurrentPosition: () => ipcRenderer.invoke('get-current-position'),
   setMouseThrough: (ignore) => ipcRenderer.invoke('toggle-mouse-through', ignore),
+  forceResetMouseState: () => ipcRenderer.invoke('force-reset-mouse-state'), // 強制重置滑鼠狀態
   resetWindowState: () => ipcRenderer.invoke('reset-window-state'),
   refocusWindow: () => ipcRenderer.invoke('refocus-window'),
   toggleChat: () => ipcRenderer.invoke('toggle-chat'),

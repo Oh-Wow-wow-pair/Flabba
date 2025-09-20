@@ -180,25 +180,36 @@
     let mouseStartX, mouseStartY;
     let isMouseOver = false;
     
-    // 滑鼠互動
-    petElement.addEventListener('mouseenter', () => {
-      console.log('Mouse enter pet');
+    // 滑鼠互動處理函數
+    function handleMouseEnter() {
+      console.log('=== Mouse enter pet ===');
+      console.log('設置滑鼠穿透: false');
       isMouseOver = true;
       if (window.electronAPI) {
         window.electronAPI.setMouseThrough(false);
       }
       lastInteractionTime = Date.now();
-    });
+    }
 
-    petElement.addEventListener('mouseleave', () => {
-      console.log('Mouse leave pet');
+    function handleMouseLeave() {
+      console.log('=== Mouse leave pet ===');
+      console.log('dragging:', dragging);
+      console.log('isContextMenuOpen:', isContextMenuOpen);
+      console.log('準備設置滑鼠穿透: true');
       isMouseOver = false;
-      // 只有在不拖拽時才啟用穿透
-      if (!dragging && window.electronAPI) {
+      // 只有在不拖拽且沒有開啟右鍵選單時才啟用穿透
+      if (!dragging && !isContextMenuOpen && window.electronAPI) {
         window.electronAPI.setMouseThrough(true);
         setPetState('walk');
+        console.log('滑鼠穿透已設置為 true');
+      } else {
+        console.log('未設置滑鼠穿透，dragging:', dragging, 'isContextMenuOpen:', isContextMenuOpen);
       }
-    });
+    }
+
+    // 滑鼠互動
+    petElement.addEventListener('mouseenter', handleMouseEnter);
+    petElement.addEventListener('mouseleave', handleMouseLeave);
 
     // 拖拽開始事件 - 立即響應
     petElement.addEventListener('mousedown', (e) => {
@@ -354,9 +365,17 @@
       }
     });
     
-    // 右鍵事件處理 - 使用原生選單
-    petElement.addEventListener('contextmenu', (e) => {
+    // 右鍵事件處理函數
+    function handleContextMenu(e) {
+      console.log('=== 右鍵事件觸發 ===');
+      console.log('事件對象:', e);
+      console.log('當前時間:', new Date().toLocaleTimeString());
+      console.log('isContextMenuOpen:', isContextMenuOpen);
+      console.log('isMouseOver:', isMouseOver);
+      console.log('dragging:', dragging);
+      
       e.preventDefault(); // 防止顯示預設右鍵菜單
+      e.stopPropagation(); // 阻止事件冒泡
       
       console.log('右鍵點擊，當前選單狀態:', isContextMenuOpen);
       
@@ -376,7 +395,10 @@
       }
       
       console.log('顯示右鍵選單，桌寵暫停移動');
-    });
+    }
+
+    // 綁定右鍵事件處理 - 使用原生選單
+    petElement.addEventListener('contextmenu', handleContextMenu);
     
     // 啟動
     setTimeout(() => {
@@ -463,11 +485,47 @@
         // 監聽右鍵選單關閉事件
         if (window.electronAPI.onContextMenuClosed) {
           window.electronAPI.onContextMenuClosed(() => {
-            console.log('右鍵選單已關閉');
+            console.log('=== 右鍵選單已關閉 ===');
+            console.log('關閉前 isContextMenuOpen:', isContextMenuOpen);
+            console.log('isMouseOver:', isMouseOver);
             isContextMenuOpen = false;
+            
+            // 完全重新初始化整個事件系統
+            console.log('完全重新初始化事件系統');
+            
+            // 移除所有滑鼠事件監聽器
+            petElement.removeEventListener('contextmenu', handleContextMenu);
+            petElement.removeEventListener('mouseenter', handleMouseEnter);
+            petElement.removeEventListener('mouseleave', handleMouseLeave);
+            
+            // 強制重置所有狀態
+            isMouseOver = false;
+            dragging = false;
+            
+            // 強制重置滑鼠狀態
+            if (window.electronAPI.forceResetMouseState) {
+              console.log('執行強制重置滑鼠狀態');
+              window.electronAPI.forceResetMouseState();
+            }
+            
+            // 延遲重新綁定所有事件監聽器
+            setTimeout(() => {
+              console.log('重新綁定所有事件監聽器');
+              petElement.addEventListener('contextmenu', handleContextMenu);
+              petElement.addEventListener('mouseenter', handleMouseEnter);
+              petElement.addEventListener('mouseleave', handleMouseLeave);
+              
+              // 模擬 mouseenter 重置狀態
+              console.log('模擬 mouseenter 重置狀態');
+              handleMouseEnter();
+            }, 100);
+            
             // 如果沒有其他暫停狀態，恢復移動（不考慮桌面焦點）
             if (!isPaused && !isTemporaryPaused) {
+              console.log('恢復桌寵移動');
               setPetState('walk');
+            } else {
+              console.log('不恢復移動，isPaused:', isPaused, 'isTemporaryPaused:', isTemporaryPaused);
             }
           });
         }

@@ -201,15 +201,12 @@ app.whenReady().then(() => {
   globalShortcut.register('Escape', () => {
     if (petWindow && !petWindow.isDestroyed()) {
       petWindow.show();
-      petWindow.focus();
-      petWindow.setIgnoreMouseEvents(false); // 暫時禁用滑鼠穿透
+      petWindow.setIgnoreMouseEvents(false); // 重置滑鼠穿透，讓前端控制
       
       // 發送訊息給前端重置拖拽狀態
       petWindow.webContents.send('reset-drag-state');
       
-      setTimeout(() => {
-        petWindow.setIgnoreMouseEvents(true, { forward: true });
-      }, 1000);
+      // 移除強制設置穿透的邏輯，讓前端的 mouseenter/mouseleave 控制
     }
   });
 
@@ -239,6 +236,15 @@ ipcMain.handle('get-current-position', () => {
     return { x, y };
   }
   return { x: 0, y: 0 };
+});
+
+// 新增：強制重置滑鼠狀態
+ipcMain.handle('force-reset-mouse-state', () => {
+  if (petWindow) {
+    console.log('強制重置滑鼠狀態');
+    petWindow.setIgnoreMouseEvents(false); // 重置為可接收事件
+    // 不設置超時，讓前端的 mouseenter/mouseleave 控制
+  }
 });
 
 ipcMain.handle('toggle-mouse-through', (_e, ignore) => {
