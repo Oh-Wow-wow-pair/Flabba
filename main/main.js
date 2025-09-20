@@ -62,16 +62,29 @@ function createContextMenu() {
     },
     { type: 'separator' },
     {
-      label: isPetPaused ? '開始移動' : '暫停移動',
+      label: (isPetPaused || isAnyWindowOpen) ? '繼續移動' : '暫停移動',
       click: () => {
         // 選單項目被點擊時立即通知選單關閉
         if (petWindow) {
           petWindow.webContents.send('context-menu-closed');
         }
-        isPetPaused = !isPetPaused;
-        // 通知渲染進程切換暫停狀態
-        if (petWindow) {
-          petWindow.webContents.send('toggle-permanent-pause', isPetPaused);
+        
+        // 如果有視窗開啟，關閉所有視窗
+        if (isAnyWindowOpen) {
+          if (chatWindow && chatWindow.isVisible()) {
+            chatWindow.hide();
+          }
+          if (instachatWindow && instachatWindow.isVisible()) {
+            instachatWindow.hide();
+          }
+          // 視窗關閉會自動觸發 updatePetPauseState()
+        } else {
+          // 沒有視窗開啟，切換永久暫停狀態
+          isPetPaused = !isPetPaused;
+          // 通知渲染進程切換暫停狀態
+          if (petWindow) {
+            petWindow.webContents.send('toggle-permanent-pause', isPetPaused);
+          }
         }
       }
     }
