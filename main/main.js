@@ -1,6 +1,25 @@
 
 const { app, BrowserWindow, screen, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
+const groq = require('groq-sdk');
+const openai = require('openai');
+
+require('dotenv').config();
+
+// const aiClient = new openai.OpenAI({
+//   apiKey: process.env.LLM_API_KEY,
+//   baseURL: process.env.LLM_API_BASE_URL
+// });
+
+// const aiClient = new openai.OpenAI();
+
+if (!process.env.GROQ_API_KEY) {
+  console.error('GROQ_API_KEY is not set in environment variables.');
+}
+
+const aiClient = new groq.Groq({
+  apiKey: process.env.GROQ_API_KEY,
+});
 
 let petWindow, chatWindow, instachatWindow;
 
@@ -111,7 +130,67 @@ function toggleChatWindow() {
   }
 }
 
-app.whenReady().then(() => {
+async function messageToAi(message) {
+  console.log('Sending message to AI:', message);
+
+  // Groq SDK example
+  return await aiClient.chat.completions.create({
+    model: 'openai/gpt-oss-20b',
+    temperature: 1,
+    max_completion_tokens: 8192,
+    messages: [{
+      role: 'user',
+      content: message
+    }],
+  })
+  .catch(async (err) => {
+    if (err instanceof groq.GroqError) {
+      console.error(err.status + ' ' + err.name + ': ' + err.message);
+    }
+    else {
+      throw err;
+    }
+  })
+  .then((res) => {
+    console.log(res.choices);
+    if (res && res.choices && res.choices.length > 0) {
+      return res.choices[0].message.content;
+    }
+  });
+
+  // OpenAI SDK example
+  // await aiClient.chat.completions.create({
+  //     model: 'gpt-4o',
+  //     input: message
+  //   })
+  //   .then((response) => {
+  //     console.log('OpenAI response:', response);
+  //     if (response && response.choices && response.choices.length > 0) {
+  //       return response.choices[0].message.content;
+  //     }
+  //   })
+  //   .catch((error) => {
+  //     console.error('Error from OpenAI:', error);
+  //   });
+
+  // Direct fetch example (if needed)
+  // return await fetch('https://nrmfcuv5mcnizdjv.ai-plugin.io/chat/completions', {
+  //   method: 'POST',
+  //   headers: {
+  //     'Content-Type': 'application/json',
+  //     'Authorization': `Bearer ${process.env.LLM_API_KEY}`
+  //   }
+  // })
+  // .catch((error) => {
+  //   console.error('Error during fetch:', error);
+  // }) 
+  // .then(response => response.json())
+  // .then(data => {
+  //   console.log('response data:', data);
+  // });
+}
+
+app.whenReady().then(async () => {
   createPetWindow();
   createChatWindow();
   createInstachatWindow();
@@ -204,6 +283,10 @@ ipcMain.handle('show-instachat-at-pet', () => {
     instachatWindow.setPosition(petX + 130, petY, false);
     toggleInstachatWindow();
   }
+});
+
+ipcMain.handle('message-to-ai', async (_e, message) => {
+  return await messageToAi(message);
 });
 
 // Keep app alive even if windows are hidden (typical for tray apps)
