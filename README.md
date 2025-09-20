@@ -1,4 +1,3 @@
-
 # Desktop Pet MVP (Electron + Three.js)
 
 A tiny MVP that shows a transparent desktop pet window (always-on-top) rendered with three.js
@@ -9,7 +8,8 @@ that bounces around your screen. Double-click the pet to toggle a minimal chat w
 ```bash
 cd desktop-pet-mvp
 npm install
-npm start
+npm start   # Run normally
+npm run dev # Run with nodemon, that will restart the app automatically after editing
 ```
 
 > If `npm start` doesn't launch, ensure you have Node.js installed and that `electron` finished installing.
