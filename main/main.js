@@ -53,6 +53,13 @@ function createChatWindow() {
   });
   chatWindow.loadFile(path.join(__dirname, '../renderer/chat/index.html'));
 
+  chatWindow.on('show', () => {
+    instachatWindow.hide();
+  });
+  chatWindow.on('focus', () => {
+    instachatWindow.hide();
+  });
+
   chatWindow.on('close', (event) => {
     event.preventDefault();
     chatWindow.hide();

@@ -1,7 +1,7 @@
 {
-  "name": "desktop-pet-mvp",
+  "name": "desktop-pet",
   "version": "0.1.0",
-  "description": "Electron + Three.js desktop pet MVP (pet window + chat window)",
+  "description": "Electron desktop pet (pet window + chat window)",
   "main": "main/main.js",
   "scripts": {
     "start": "electron .",
