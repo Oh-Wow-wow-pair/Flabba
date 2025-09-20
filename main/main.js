@@ -2,7 +2,7 @@
 const { app, BrowserWindow, screen, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
 
-let petWindow, chatWindow;
+let petWindow, chatWindow, instachatWindow;
 
 function createPetWindow() {
   petWindow = new BrowserWindow({
@@ -39,37 +39,76 @@ function createPetWindow() {
 
 function createChatWindow() {
   chatWindow = new BrowserWindow({
-    width: 380,
-    height: 520,
+    width: 650,
+    height: 700,
     show: false,
     frame: false,
     resizable: false,
-    alwaysOnTop: true,
-    transparent: true,
+    skipTaskbar: true,
+    transparent: false,
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true
     }
   });
   chatWindow.loadFile(path.join(__dirname, '../renderer/chat/index.html'));
+
+  chatWindow.on('close', (event) => {
+    event.preventDefault();
+    chatWindow.hide();
+  });
+}
+
+function createInstachatWindow() {
+  instachatWindow = new BrowserWindow({
+    width: 300,
+    height: 200,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    skipTaskbar: true,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/preload.js'),
+      contextIsolation: true
+    }
+  });
+  instachatWindow.loadFile(path.join(__dirname, '../renderer/instachat/index.html'));
+  instachatWindow.hide();
+}
+
+function toggleInstachatWindow() {
+  if (instachatWindow.isVisible()) {
+    if (instachatWindow.isFocused()) {
+      instachatWindow.hide();
+    }
+    else {
+      instachatWindow.focus();
+    }
+  }
+  else {
+    instachatWindow.show();
+  }
 }
 
 function toggleChatWindow() {
-  if (!chatWindow || !petWindow) return;
   if (chatWindow.isVisible()) {
-    chatWindow.hide();
-  } else {
-    const [x, y] = petWindow.getPosition();
-    chatWindow.setPosition(x + 140, y);
+    if (chatWindow.isFocused()) {
+      chatWindow.hide();
+    }
+    else {
+      chatWindow.focus();
+    }
+  }
+  else {
     chatWindow.show();
-    chatWindow.focus();
   }
 }
 
 app.whenReady().then(() => {
   createPetWindow();
   createChatWindow();
-  
+  createInstachatWindow();
+
   // 註冊全域快捷鍵：Esc 來重新啟動桌寵焦點
   globalShortcut.register('Escape', () => {
     if (petWindow && !petWindow.isDestroyed()) {
@@ -84,6 +123,11 @@ app.whenReady().then(() => {
         petWindow.setIgnoreMouseEvents(true, { forward: true });
       }, 1000);
     }
+  });
+
+  globalShortcut.register('Alt+P', () => {
+    toggleChatWindow();
+    // toggleInstachatWindow();
   });
 });
 
@@ -146,6 +190,14 @@ ipcMain.handle('reset-window-state', () => {
 });
 
 ipcMain.handle('toggle-chat', () => toggleChatWindow());
+
+ipcMain.handle('show-instachat-at-pet', () => {
+  if (petWindow && instachatWindow) {
+    const [petX, petY] = petWindow.getPosition();
+    instachatWindow.setPosition(petX + 130, petY, false);
+    toggleInstachatWindow();
+  }
+});
 
 // Keep app alive even if windows are hidden (typical for tray apps)
 // Do not quit on macOS when all windows closed

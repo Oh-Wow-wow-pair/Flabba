@@ -1,12 +1,14 @@
-# Desktop Pet MVP (Electron)
+# Desktop Pet MVP (Electron + Three.js)
 
-A tiny Electron MVP that shows a transparent, click-through desktop pet window which moves and bounces around. Double-click the pet to toggle a minimal chat window.
+A tiny MVP that shows a transparent desktop pet window (always-on-top) rendered with three.js
+that bounces around your screen. Double-click the pet to toggle a minimal chat window.
 
 ## Run
 
 ```sh
 npm install
-npm start
+npm start   # Run normally
+npm run dev # Run with nodemon, that will restart the app automatically after editing
 ```
 
 ## Features

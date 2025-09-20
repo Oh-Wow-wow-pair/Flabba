@@ -9,7 +9,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   resetWindowState: () => ipcRenderer.invoke('reset-window-state'),
   refocusWindow: () => ipcRenderer.invoke('refocus-window'),
   toggleChat: () => ipcRenderer.invoke('toggle-chat'),
-  
+  showInstachatAtPet: () => ipcRenderer.invoke('show-instachat-at-pet'),
+
   // 監聽主進程訊息
   onResetDragState: (callback) => ipcRenderer.on('reset-drag-state', callback)
 });

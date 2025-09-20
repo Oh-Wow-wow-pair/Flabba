@@ -1,0 +1,5 @@
+{
+    "watch": ["main/", "renderer/", "preload/"],
+    "ext": "js json html css",
+    "delay": "3000"
+}

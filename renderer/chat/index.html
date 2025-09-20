@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Window</title>
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
+  <link rel="stylesheet" href="index.css">
+</head>
+<body class="chat-window">
+  <section class="section chat-content">
+    <div class="content">
+      <h1 class="title">小助手</h1>
+      <hr>
+    </div>
+    <div class="fixed-grid has-4-cols">
+      <div class="grid" id="chat-list">
+        <div class="cell is-col-span-3">
+          <div class="notification is-primary bubble">
+            嗨～我是你的桌面小幫手，雙擊寵物可以開/關我。問我「報到需要帶什麼？」試試看！
+          </div>
+        </div>
+        <div class="cell"></div>
+      </div>
+    </div>
+  </section>
+  <section class="section input-bar">
+    <div class="field is-grouped">
+      <input id="chat-input" class="input is-rounded" type="text" placeholder="問問歐姆巴">
+      <button id="chat-send" class="button is-primary is-rounded">發送</button>
+    </div>
+  </section>
+  <script src="index.js"></script>
+</body>
+</html>
