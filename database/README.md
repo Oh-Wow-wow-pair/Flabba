@@ -1,317 +1,382 @@
-# 🗄️ 使用者資料管理系統
+# 📡 Database API 整合文件
 
-黃巴的資料庫模組，提供使用者資料的存儲、查詢和管理功能，包含 SQLite 資料庫操作和 Flask API 服務。
+**服務地址**: `http://localhost:5001`  
+**版本**: 1.0  
+**更新時間**: 2025-09-20
 
-## 🚀 快速開始
+## 🎯 API 概述
 
-### 1. 安裝依賴
+本服務提供使用者資料管理和請假申請處理功能，支援 LLM 服務和前端的雙向整合。
 
-```bash
-pip install -r requirements.txt
-```
+## 📋 資料類型定義
 
-### 2. 啟動 API 服務
+### 使用者資料欄位
 
-```bash
-python api_server.py
-```
-
-### 3. 測試 API
-
-```bash
-python test_api.py
-```
-
-或使用 curl：
-```bash
-curl http://localhost:5000/health
-```
-
-## 🗄️ 資料庫操作
-
-### UserDataHandler 類別
-
-核心資料處理類別，負責所有資料庫操作：
-
-```python
-from data_handler import UserDataHandler
-
-# 初始化
-handler = UserDataHandler("user_data.db")
-```
-
-### 支援的資料類型
-
-| 後端欄位 | 資料類型 | 單位 | 說明 |
+| 欄位名稱 | 資料類型 | 單位 | 說明 |
 |---------|---------|------|------|
-| `leave_days` | `leave` | `days` | 剩餘特休天數 |
-| `meal_allowance` | `meal` | `ntd` | 剩餘餐補金額 |
-| `overtime_hours` | `overtime` | `hours` | 累計加班時數 |
-| `salary` | `salary` | `ntd` | 月薪 |
-| `next_bonus_date` | `bonus` | `date` | 下次獎金發放日期 |
+| `leave_days` | `number` | `days` | 剩餘特休天數 |
+| `meal_allowance` | `number` | `ntd` | 剩餘餐補金額 |
+| `overtime_hours` | `number` | `hours` | 累計加班時數 |
+| `salary` | `number` | `ntd` | 月薪 |
+| `next_bonus_date` | `string` | `YYYY-MM-DD` | 下次獎金發放日期 |
 
-### 基本操作
+### 請假類型
 
-```python
-# 更新使用者資料
-data = {
-    'leave_days': 12.5,
-    'meal_allowance': 1500,
-    'overtime_hours': 25.0
-}
-updated_count = handler.process_backend_data('user001', data)
+| 類型代碼 | 說明 |
+|---------|------|
+| `annual_leave` | 特休假 |
+| `sick_leave` | 病假 |
+| `personal_leave` | 事假 |
+| `marriage_leave` | 婚假 |
+| `funeral_leave` | 喪假 |
 
-# 查詢所有資料
-user_data = handler.get_user_data('user001')
+## 🤖 LLM 服務整合
 
-# 查詢特定類型資料
-leave_info = handler.get_user_data('user001', 'leave')
-```
+### 1. 使用者資料更新
 
-## 🌐 API 服務
+**端點**: `POST /api/llm/callback`
 
-### 啟動服務器
+**用途**: LLM 分析對話後，提取的使用者資料發送到這裡進行儲存
 
-```bash
-python api_server.py
-```
-
-服務器將在 `http://localhost:5000` 啟動
-
-### API 端點
-
-#### 🔍 健康檢查
-```http
-GET /health
-```
-
-#### 📝 更新使用者資料
-```http
-POST /api/users/{user_id}/data
-Content-Type: application/json
-
+**請求格式**:
+```json
 {
-    "leave_days": 12.5,
-    "meal_allowance": 1500,
-    "overtime_hours": 25.0,
-    "salary": 50000,
-    "next_bonus_date": "2025-12-15"
+    "user_id": "user001",
+    "extracted_data": {
+        "leave_days": 12.5,
+        "meal_allowance": 1500,
+        "overtime_hours": 25.0,
+        "salary": 50000,
+        "next_bonus_date": "2025-12-15"
+    }
 }
 ```
 
-#### 📊 獲取使用者資料
-```http
-GET /api/users/{user_id}/data           # 所有資料
-GET /api/users/{user_id}/data/{type}    # 特定類型資料
-```
-
-#### 🔄 批量更新
-```http
-POST /api/users/batch
-Content-Type: application/json
-
-{
-    "user001": {"leave_days": 10, "salary": 50000},
-    "user002": {"meal_allowance": 2000}
-}
-```
-
-### API 回應格式
-
-#### 成功回應
+**回應格式**:
 ```json
 {
     "success": true,
+    "message": "Data updated successfully",
     "user_id": "user001",
     "updated_count": 3,
-    "data": {
+    "current_data": {
         "leave": {
             "value": 12.5,
             "unit": "days",
             "description": "剩餘特休天數",
-            "updated_at": "2025-09-20 14:30:00"
+            "updated_at": "2025-09-20T14:30:00"
+        }
+        // ... 其他資料
+    },
+    "timestamp": "2025-09-20T14:30:00"
+}
+```
+
+### 2. 請假申請
+
+**端點**: `POST /api/leave/request`
+
+**用途**: LLM 處理使用者請假需求，將申請發送到前端確認
+
+**請求格式**:
+```json
+{
+    "user_id": "user001",
+    "leave_type": "annual_leave",
+    "start_date": "2025-09-25",
+    "end_date": "2025-09-26", 
+    "days": 2,
+    "reason": "個人事務"
+}
+```
+
+**回應格式**:
+```json
+{
+    "success": true,
+    "message": "Leave request created and sent to frontend",
+    "request_id": "abc12345",
+    "frontend_notified": true,
+    "status": "pending_frontend",
+    "timestamp": "2025-09-20T14:30:00"
+}
+```
+
+**流程說明**:
+1. LLM 呼叫此端點建立請假申請
+2. 系統生成 `request_id` 並通知前端
+3. 等待前端使用者確認
+4. 前端確認後自動扣除特休天數
+
+## 🖥️ 前端整合
+
+### 1. 查詢使用者資料
+
+**端點**: `GET /api/frontend/users/{user_id}/data`
+
+**查詢參數**:
+- `type`: 可選，查詢特定資料類型 (`leave`, `meal`, `overtime`, `salary`, `bonus`)
+- `format`: 可選，回應格式 (`detailed` 預設 | `simple`)
+
+**範例**:
+```bash
+GET /api/frontend/users/user001/data
+GET /api/frontend/users/user001/data?type=leave
+GET /api/frontend/users/user001/data?format=simple
+```
+
+**回應格式 (detailed)**:
+```json
+{
+    "success": true,
+    "user_id": "user001",
+    "data": {
+        "leave": {
+            "value": 12.5,
+            "unit": "days", 
+            "description": "剩餘特休天數",
+            "updated_at": "2025-09-20T14:30:00"
+        },
+        "meal": {
+            "value": 1500,
+            "unit": "ntd",
+            "description": "剩餘餐補",
+            "updated_at": "2025-09-20T14:30:00"
         }
     },
     "timestamp": "2025-09-20T14:30:00"
 }
 ```
 
-#### 錯誤回應
+**回應格式 (simple)**:
 ```json
 {
-    "success": false,
-    "error": "User ID is required",
+    "success": true,
+    "user_id": "user001", 
+    "data": {
+        "leave": 12.5,
+        "meal": 1500,
+        "overtime": 25.0,
+        "salary": 50000,
+        "bonus": "2025-12-15"
+    },
+    "format": "simple",
     "timestamp": "2025-09-20T14:30:00"
 }
 ```
 
-## 💻 使用範例
+### 2. 查詢使用者摘要
 
-### Python 客戶端
+**端點**: `GET /api/frontend/users/{user_id}/summary`
+
+**用途**: 取得格式化的使用者資訊摘要，適合在 UI 上顯示
+
+**回應格式**:
+```json
+{
+    "success": true,
+    "user_id": "user001",
+    "summary": {
+        "work_status": {
+            "leave_days": 12.5,
+            "overtime_hours": 25.0,
+            "next_bonus_date": "2025-12-15"
+        },
+        "financial": {
+            "salary": 50000,
+            "meal_allowance": 1500
+        },
+        "last_updated": "2025-09-20T14:30:00"
+    },
+    "timestamp": "2025-09-20T14:30:00"
+}
+```
+
+### 3. 查詢待處理請假申請
+
+**端點**: `GET /api/frontend/leave/pending`
+
+**查詢參數**:
+- `user_id`: 可選，只查詢特定使用者的申請
+
+**範例**:
+```bash
+GET /api/frontend/leave/pending
+GET /api/frontend/leave/pending?user_id=user001
+```
+
+**回應格式**:
+```json
+{
+    "success": true,
+    "pending_requests": {
+        "abc12345": {
+            "request_id": "abc12345",
+            "user_id": "user001",
+            "leave_type": "annual_leave",
+            "start_date": "2025-09-25",
+            "end_date": "2025-09-26",
+            "days": 2,
+            "reason": "個人事務",
+            "status": "pending_frontend",
+            "created_at": "2025-09-20T14:30:00"
+        }
+    },
+    "count": 1,
+    "timestamp": "2025-09-20T14:30:00"
+}
+```
+
+### 4. 確認/拒絕請假申請
+
+**端點**: `POST /api/leave/confirm`
+
+**用途**: 前端使用者確認或拒絕請假申請
+
+**請求格式**:
+```json
+{
+    "request_id": "abc12345",
+    "approved": true,
+    "message": "請假申請已處理"
+}
+```
+
+**回應格式 (批准)**:
+```json
+{
+    "success": true,
+    "message": "Leave request approved and processed",
+    "request_id": "abc12345",
+    "user_id": "user001",
+    "days_deducted": 2,
+    "remaining_leave_days": 10.5,
+    "database_updated": true,
+    "timestamp": "2025-09-20T14:30:00"
+}
+```
+
+**回應格式 (拒絕)**:
+```json
+{
+    "success": true,
+    "message": "Leave request rejected",
+    "request_id": "abc12345", 
+    "status": "rejected",
+    "timestamp": "2025-09-20T14:30:00"
+}
+```
+
+## 🔧 通用格式
+
+### 錯誤回應
+
+所有錯誤都會回傳統一格式：
+
+```json
+{
+    "success": false,
+    "error": "錯誤描述",
+    "timestamp": "2025-09-20T14:30:00"
+}
+```
+
+**常見錯誤碼**:
+- `400`: 請求格式錯誤或缺少必要欄位
+- `404`: 資源不存在 (使用者資料或請假申請)
+- `500`: 伺服器內部錯誤
+
+### 健康檢查
+
+**端點**: `GET /health`
+
+**回應格式**:
+```json
+{
+    "status": "healthy",
+    "service": "Database API",
+    "endpoints": {
+        "llm_callback": "/api/llm/callback",
+        "frontend_data": "/api/frontend/users/<user_id>/data",
+        "frontend_summary": "/api/frontend/users/<user_id>/summary"
+    },
+    "timestamp": "2025-09-20T14:30:00"
+}
+```
+
+## 🚀 整合範例
+
+### LLM 服務範例
 
 ```python
 import requests
 
-# 更新資料
-response = requests.post(
-    'http://localhost:5000/api/users/user001/data',
-    json={
-        'leave_days': 15.0,
-        'meal_allowance': 2000
-    }
-)
-print(response.json())
+# 更新使用者資料
+def update_user_data(user_id, extracted_data):
+    response = requests.post(
+        'http://localhost:5001/api/llm/callback',
+        json={
+            'user_id': user_id,
+            'extracted_data': extracted_data
+        }
+    )
+    return response.json()
 
-# 查詢資料
-response = requests.get('http://localhost:5000/api/users/user001/data')
-data = response.json()['data']
+# 建立請假申請
+def create_leave_request(user_id, leave_data):
+    response = requests.post(
+        'http://localhost:5001/api/leave/request',
+        json={
+            'user_id': user_id,
+            'leave_type': leave_data['type'],
+            'start_date': leave_data['start'],
+            'end_date': leave_data['end'],
+            'days': leave_data['days'],
+            'reason': leave_data['reason']
+        }
+    )
+    return response.json()
 ```
 
-### curl 指令
-
-```bash
-# 更新資料
-curl -X POST http://localhost:5000/api/users/user001/data \
-  -H "Content-Type: application/json" \
-  -d '{"leave_days": 15.0, "meal_allowance": 2000}'
-
-# 查詢資料
-curl http://localhost:5000/api/users/user001/data
-
-# 查詢特定資料
-curl http://localhost:5000/api/users/user001/data/leave
-```
-
-### JavaScript 前端
+### 前端整合範例
 
 ```javascript
-// 更新資料
-const updateData = async (userId, data) => {
-    const response = await fetch(`/api/users/${userId}/data`, {
+// 查詢使用者資料
+async function getUserData(userId) {
+    const response = await fetch(`http://localhost:5001/api/frontend/users/${userId}/summary`);
+    return await response.json();
+}
+
+// 查詢待處理請假
+async function getPendingLeaves() {
+    const response = await fetch('http://localhost:5001/api/frontend/leave/pending');
+    return await response.json();
+}
+
+// 確認請假申請
+async function confirmLeave(requestId, approved) {
+    const response = await fetch('http://localhost:5001/api/leave/confirm', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(data)
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            request_id: requestId,
+            approved: approved,
+            message: approved ? '已批准' : '已拒絕'
+        })
     });
     return await response.json();
-};
-
-// 查詢資料
-const getUserData = async (userId) => {
-    const response = await fetch(`/api/users/${userId}/data`);
-    return await response.json();
-};
-```
-
-## 🧪 測試
-
-### 執行測試
-
-```bash
-# 執行完整 API 測試
-python test_api.py
-
-# 執行資料庫測試
-python data_handler.py
-
-# 初始化範例資料
-python sample_data.py
-```
-
-## 🚀 部署
-
-### 開發環境
-```bash
-python api_server.py  # Debug 模式，port 5000
-```
-
-### 生產環境
-
-使用 Gunicorn：
-```bash
-pip install gunicorn
-gunicorn -w 4 -b 0.0.0.0:8000 api_server:app
-```
-
-使用 uWSGI：
-```bash
-pip install uwsgi
-uwsgi --http :8000 --wsgi-file api_server.py --callable app
-```
-
-### Docker 部署
-
-```dockerfile
-FROM python:3.9-slim
-
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-COPY . .
-EXPOSE 5000
-
-CMD ["python", "api_server.py"]
-```
-
-## 👩‍💻 開發指南
-
-### 新增資料類型
-
-1. 在 `data_handler.py` 中的 `data_mapping` 新增對應：
-
-```python
-data_mapping = {
-    'leave_days': ('leave', 'days', '剩餘特休天數'),
-    'new_field': ('new_type', 'unit', '新欄位描述'), 
 }
 ```
 
-2. 更新 API 文件和測試
+## ⚠️ 注意事項
 
-### 擴展 API 功能
+1. **資料持久性**: 使用者資料儲存在 SQLite，請假申請暫存在記憶體中
+2. **並發處理**: 支援多個同時請求，但請假申請處理是序列的
+3. **資料驗證**: API 會驗證必要欄位，但不會驗證業務邏輯 (如日期合理性)
+4. **通知機制**: 目前請假申請的前端通知是模擬的，建議實作 WebSocket 或輪詢
 
-```python
-@app.route('/api/users/<user_id>/data/<data_type>', methods=['DELETE'])
-@handle_errors
-def delete_user_data(user_id, data_type):
-    """刪除特定類型資料"""
-    # 實作刪除邏輯
-    pass
-```
+## 📞 支援
 
-### 資料庫遷移
-
-如需修改資料表結構：
-
-1. 更新 `schema.sql`
-2. 建立遷移腳本
-3. 更新 `init_database()` 方法
-
-## 🔧 配置選項
-
-### 環境變數
-
-```bash
-export DB_PATH="custom_path/user_data.db"  # 自訂資料庫路徑
-export API_PORT=8000                       # 自訂 API 埠號
-export API_HOST="0.0.0.0"                 # 自訂 API 主機
-export DEBUG=False                         # 關閉 Debug 模式
-```
-
-### 設定檔
-
-建立 `config.py`：
-```python
-import os
-
-DATABASE_PATH = os.getenv('DB_PATH', 'user_data.db')
-API_HOST = os.getenv('API_HOST', '0.0.0.0')
-API_PORT = int(os.getenv('API_PORT', 5000))
-DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
-```
-
----
-
-**版本**: 1.0.0  
-**最後更新**: 2025-09-20  
-**Python 版本**: 3.7+
+- 健康檢查: `GET /health`
+- 服務狀態確認: 檢查回應中的 `success` 欄位
+- 日誌監控: 伺服器會記錄所有請求的詳細日誌
