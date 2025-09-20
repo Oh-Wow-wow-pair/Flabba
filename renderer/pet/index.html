@@ -42,6 +42,63 @@
   </div>
   
   <script>
+    // 手繪 PNG 圖檔配置 - 根據 README.md 說明
+    const handdrawnSprites = {
+      // 睡覺待機動畫：1-6 循環
+      idle: [
+        'sprites/idle_sleeping/idle_sleeping_1.PNG',
+        'sprites/idle_sleeping/idle_sleeping_2.PNG',
+        'sprites/idle_sleeping/idle_sleeping_3.PNG',
+        'sprites/idle_sleeping/idle_sleeping_4.PNG',
+        'sprites/idle_sleeping/idle_sleeping_5.PNG',
+        'sprites/idle_sleeping/idle_sleeping_6.PNG'
+      ],
+      // 行走動畫：1-7 循環（面向左，可自動翻轉）
+      walk: [
+        'sprites/walking/walking_1.PNG',
+        'sprites/walking/walking_2.PNG',
+        'sprites/walking/walking_3.PNG',
+        'sprites/walking/walking_4.PNG',
+        'sprites/walking/walking_5.PNG',
+        'sprites/walking/walking_6.PNG',
+        'sprites/walking/walking_7.PNG'
+      ],
+      // 清醒動畫：1-8 (滑鼠點擊叫醒時使用)
+      awake: [
+        'sprites/awake/awake_1.PNG',
+        'sprites/awake/awake_2.PNG',
+        'sprites/awake/awake_3.PNG',
+        'sprites/awake/awake_4.PNG',
+        'sprites/awake/awake_5.PNG',
+        'sprites/awake/awake_6.PNG',
+        'sprites/awake/awake_7.PNG',
+        'sprites/awake/awake_8.PNG'
+      ],
+      // 認真樣子動畫：1-6 順著播（右鍵點擊時使用）
+      serious: [
+        'sprites/serious/serious_1.PNG',
+        'sprites/serious/serious_2.PNG',
+        'sprites/serious/serious_3.PNG',
+        'sprites/serious/serious_4.PNG',
+        'sprites/serious/serious_5.PNG',
+        'sprites/serious/serious_6.PNG'
+      ],
+      // 被拖拽掙扎動畫：1-7 循環
+      grasp: [
+        'sprites/grasp/grasp_1.PNG',
+        'sprites/grasp/grasp_2.PNG',
+        'sprites/grasp/grasp_3.PNG',
+        'sprites/grasp/grasp_4.PNG',
+        'sprites/grasp/grasp_5.PNG',
+        'sprites/grasp/grasp_6.PNG',
+        'sprites/grasp/grasp_7.PNG'
+      ],
+      // 彈跳動畫（暫時使用第一幀）
+      bounce: ['sprites/walking/walking_1.PNG'],
+      // 睡覺動畫（使用 idle_sleeping 的第一幀）
+      sleep: ['sprites/idle_sleeping/idle_sleeping_1.PNG']
+    };
+    
     // PNG/SVG 圖檔配置 - 目前使用SVG，但支援PNG
     const sprites = {
       idle: ['sprites/idle_1.svg', 'sprites/idle_2.svg'],
@@ -81,35 +138,52 @@
     let vx = 3, vy = 2;
     let dragging = false;
     let lastInteractionTime = Date.now();
+    let isPaused = false; // 永久暫停狀態（需手動恢復）
+    let isTemporaryPaused = false; // 暫時停止狀態（右鍵可恢復）
+    let isContextMenuOpen = false; // 追蹤右鍵選單是否開啟
+    let isManuallyPaused = false; // 追蹤是否為手動點擊"暫停移動"按鈕暫停
     
-    function loadSprite(spritePath, fallbackPath, finalFallback) {
+    function loadSprite(...spritePaths) {
       return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve(spritePath);
-        img.onerror = () => {
-          if (fallbackPath) {
-            const fallbackImg = new Image();
-            fallbackImg.onload = () => resolve(fallbackPath);
-            fallbackImg.onerror = () => resolve(finalFallback);
-            fallbackImg.src = fallbackPath;
-          } else {
-            resolve(finalFallback);
+        function tryLoadSprite(index) {
+          if (index >= spritePaths.length) {
+            console.log('所有圖片載入失敗，使用預設圖片');
+            resolve(defaultSprite); // 如果所有路徑都失敗，使用預設
+            return;
           }
-        };
-        img.src = spritePath;
+          
+          const currentPath = spritePaths[index];
+          console.log(`嘗試載入圖片 ${index}: ${currentPath}`);
+          
+          const img = new Image();
+          img.onload = () => {
+            console.log(`圖片載入成功: ${currentPath}`);
+            resolve(currentPath);
+          };
+          img.onerror = () => {
+            console.log(`圖片載入失敗: ${currentPath}`);
+            tryLoadSprite(index + 1); // 嘗試下一個
+          };
+          img.src = currentPath;
+        }
+        
+        tryLoadSprite(0);
       });
     }
     
     async function updateSprite() {
+      // 優先使用手繪圖片，然後是 PNG，最後是 SVG
+      const handdrawnStateSprites = handdrawnSprites[currentState] || handdrawnSprites.idle;
       const stateSprites = sprites[currentState] || sprites.idle;
       const pngStateSprites = pngSprites[currentState] || pngSprites.idle;
       
-      const spriteIndex = animationFrame % stateSprites.length;
-      const svgSprite = stateSprites[spriteIndex];
-      const pngSprite = pngStateSprites[spriteIndex];
+      const spriteIndex = animationFrame % handdrawnStateSprites.length;
+      const handdrawnSprite = handdrawnStateSprites[spriteIndex];
+      const svgSprite = stateSprites[spriteIndex % stateSprites.length];
+      const pngSprite = pngStateSprites[spriteIndex % pngStateSprites.length];
       
-      // 先嘗試載入PNG，如果失敗則使用SVG
-      const finalSprite = await loadSprite(pngSprite, svgSprite, defaultSprite);
+      // 優先順序：手繪 PNG -> 一般 PNG -> SVG -> 預設
+      const finalSprite = await loadSprite(handdrawnSprite, pngSprite, svgSprite);
       petSprite.src = finalSprite;
     }
     
@@ -121,7 +195,19 @@
     
     function animateFrames() {
       const now = Date.now();
-      if (now - lastFrameTime > 400) { // 每400ms切換一幀
+      
+      // 為不同狀態設置不同的動畫速度
+      let frameInterval = 400; // 預設每400ms切換一幀
+      
+      if (currentState === 'awake') {
+        frameInterval = 200; // awake 動畫放慢，每200ms切換一幀
+      } else if (currentState === 'idle_sleeping') {
+        frameInterval = 600; // 睡覺動畫更慢，每600ms切換一幀
+      } else if (currentState === 'walking') {
+        frameInterval = 150; // 走路動畫稍快，每150ms切換一幀
+      }
+      
+      if (now - lastFrameTime > frameInterval) {
         animationFrame++;
         lastFrameTime = now;
         updateSprite();
@@ -129,18 +215,30 @@
     }
     
     function move() {
-      if (dragging) return;
+      if (dragging || isPaused || isTemporaryPaused || isContextMenuOpen) return; // 移除 isDesktopFocused 檢查
       
       x += vx;
       y += vy;
       
       let bounced = false;
-      // 簡單的邊界檢測
-      if (x < 0 || x > 1200) { 
+      // 改進的邊界檢測 - 更嚴格的邊界
+      if (x < 10) { 
+        x = 10;
         vx = -vx; 
         bounced = true; 
       }
-      if (y < 0 || y > 800) { 
+      if (x > 1200) { 
+        x = 1200;
+        vx = -vx; 
+        bounced = true; 
+      }
+      if (y < 10) { 
+        y = 10;
+        vy = -vy; 
+        bounced = true; 
+      }
+      if (y > 800) { 
+        y = 800;
         vy = -vy; 
         bounced = true; 
       }
@@ -164,25 +262,36 @@
     let mouseStartX, mouseStartY;
     let isMouseOver = false;
     
-    // 滑鼠互動
-    petElement.addEventListener('mouseenter', () => {
-      console.log('Mouse enter pet');
+    // 滑鼠互動處理函數
+    function handleMouseEnter() {
+      console.log('=== Mouse enter pet ===');
+      console.log('設置滑鼠穿透: false');
       isMouseOver = true;
       if (window.electronAPI) {
         window.electronAPI.setMouseThrough(false);
       }
       lastInteractionTime = Date.now();
-    });
+    }
 
-    petElement.addEventListener('mouseleave', () => {
-      console.log('Mouse leave pet');
+    function handleMouseLeave() {
+      console.log('=== Mouse leave pet ===');
+      console.log('dragging:', dragging);
+      console.log('isContextMenuOpen:', isContextMenuOpen);
+      console.log('準備設置滑鼠穿透: true');
       isMouseOver = false;
-      // 只有在不拖拽時才啟用穿透
-      if (!dragging && window.electronAPI) {
+      // 只有在不拖拽且沒有開啟右鍵選單時才啟用穿透
+      if (!dragging && !isContextMenuOpen && window.electronAPI) {
         window.electronAPI.setMouseThrough(true);
         setPetState('walk');
+        console.log('滑鼠穿透已設置為 true');
+      } else {
+        console.log('未設置滑鼠穿透，dragging:', dragging, 'isContextMenuOpen:', isContextMenuOpen);
       }
-    });
+    }
+
+    // 滑鼠互動
+    petElement.addEventListener('mouseenter', handleMouseEnter);
+    petElement.addEventListener('mouseleave', handleMouseLeave);
 
     // 拖拽開始事件 - 立即響應
     petElement.addEventListener('mousedown', (e) => {
@@ -196,9 +305,20 @@
         // 立即設置拖拽狀態
         dragging = true;
         window.lastDragStart = Date.now();
-        mouseStartX = e.clientX;
-        mouseStartY = e.clientY;
-        setPetState('idle');
+        
+        // 計算鼠標相對於桌寵的偏移量
+        const rect = petElement.getBoundingClientRect();
+        const petCenterX = rect.left + rect.width / 2;
+        const petCenterY = rect.top + rect.height / 2;
+        
+        // 記錄鼠標相對於桌寵中心的偏移
+        window.dragOffsetX = e.clientX - petCenterX;
+        window.dragOffsetY = e.clientY - petCenterY;
+        
+        console.log('Drag offset:', window.dragOffsetX, window.dragOffsetY);
+        
+        // 拖拽時使用 grasp 掙扎動畫
+        setPetState('grasp');
         
         // 立即禁用滑鼠穿透
         if (window.electronAPI) {
@@ -208,7 +328,8 @@
 
       // check for right click
       if (e.button === 2) {
-        window.electronAPI.showInstachatAtPet();
+        // 右鍵點擊不直接開啟對話框，由 contextmenu 事件處理
+        return;
       }
     });    // 防止圖片拖拽
     petSprite.addEventListener('dragstart', (e) => {
@@ -221,30 +342,23 @@
       return false;
     });
     
-    // 節流的拖拽移動處理
-    let moveTimeout = null;
+    // 實時拖拽移動處理 - 讓桌寵跟隨鼠標
     window.addEventListener('mousemove', (e) => {
-      if (dragging && mouseStartX !== undefined && mouseStartY !== undefined) {
-        const deltaX = e.clientX - mouseStartX;
-        const deltaY = e.clientY - mouseStartY;
+      if (dragging) {
+        // 計算桌寵應該移動到的位置（鼠標位置減去偏移量）
+        const targetX = e.screenX - window.dragOffsetX - 64; // 64 是窗口一半寬度
+        const targetY = e.screenY - window.dragOffsetY - 64; // 64 是窗口一半高度
         
-        // 立即更新位置變數
-        x += deltaX;
-        y += deltaY;
-        mouseStartX = e.clientX;
-        mouseStartY = e.clientY;
+        console.log('Mouse at:', e.screenX, e.screenY, 'Moving window to:', targetX, targetY);
         
-        // 節流視窗移動請求
-        if (moveTimeout) {
-          clearTimeout(moveTimeout);
+        // 立即移動窗口，不使用節流
+        if (window.electronAPI) {
+          window.electronAPI.moveWindow(targetX, targetY);
         }
         
-        moveTimeout = setTimeout(() => {
-          if (window.electronAPI) {
-            window.electronAPI.moveWindow(x, y);
-          }
-          moveTimeout = null;
-        }, 8); // 8ms 節流，約 120fps
+        // 更新內部位置記錄
+        x = targetX;
+        y = targetY;
       }
     });
 
@@ -259,8 +373,8 @@
         
         // 立即重置拖拽狀態
         dragging = false;
-        mouseStartX = undefined;
-        mouseStartY = undefined;
+        window.dragOffsetX = undefined;
+        window.dragOffsetY = undefined;
         setPetState('walk');
         
         // 根據滑鼠位置決定穿透狀態
@@ -283,8 +397,8 @@
         
         // 立即重置拖拽狀態
         dragging = false;
-        mouseStartX = undefined;
-        mouseStartY = undefined;
+        window.dragOffsetX = undefined;
+        window.dragOffsetY = undefined;
         setPetState('walk');
         
         // 滑鼠在寵物上，保持可互動
@@ -298,8 +412,8 @@
     window.addEventListener('blur', () => {
       if (dragging) {
         dragging = false;
-        mouseStartX = undefined;
-        mouseStartY = undefined;
+        window.dragOffsetX = undefined;
+        window.dragOffsetY = undefined;
         if (window.electronAPI) {
           window.electronAPI.setMouseThrough(true);
         }
@@ -311,8 +425,8 @@
     setInterval(() => {
       if (dragging && window.lastDragStart && (Date.now() - window.lastDragStart > 10000)) {
         dragging = false;
-        mouseStartX = undefined;
-        mouseStartY = undefined;
+        window.dragOffsetX = undefined;
+        window.dragOffsetY = undefined;
         if (window.electronAPI) {
           window.electronAPI.setMouseThrough(true);
         }
@@ -337,40 +451,57 @@
       }
     });
     
-    petElement.addEventListener('dblclick', () => {
-      if (window.electronAPI) {
-        window.electronAPI.toggleChat();
-      }
-      setPetState('bounce');
-      setTimeout(() => setPetState('walk'), 500);
-    });
-    
-    // 右鍵點擊重新獲得焦點（解決拖拽失效問題）
-    petElement.addEventListener('contextmenu', (e) => {
+    // 右鍵事件處理函數
+    function handleContextMenu(e) {
+      console.log('=== 右鍵事件觸發 ===');
+      console.log('事件對象:', e);
+      console.log('當前時間:', new Date().toLocaleTimeString());
+      console.log('isContextMenuOpen:', isContextMenuOpen);
+      console.log('isMouseOver:', isMouseOver);
+      console.log('dragging:', dragging);
+      console.log('當前狀態:', currentState);
+      
       e.preventDefault(); // 防止顯示預設右鍵菜單
-      console.log('Right click - attempting to refocus window');
-      if (window.electronAPI && window.electronAPI.refocusWindow) {
-        window.electronAPI.refocusWindow().then(success => {
-          if (success) {
-            console.log('Window refocused successfully');
-            // 重新啟用滑鼠互動
-            setTimeout(() => {
-              if (window.electronAPI) {
-                window.electronAPI.setMouseThrough(true);
-              }
-            }, 100);
-          }
-        });
+      e.stopPropagation(); // 阻止事件冒泡
+      
+      console.log('右鍵點擊，當前選單狀態:', isContextMenuOpen);
+      
+      // 如果選單已經開啟，先關閉它
+      if (isContextMenuOpen) {
+        console.log('選單已開啟，重置狀態');
+        isContextMenuOpen = false;
       }
       
-      // 視覺反饋
-      petElement.classList.add('bounce');
-      setPetState('bounce');
-      setTimeout(() => {
-        petElement.classList.remove('bounce');
-        setPetState('walk');
-      }, 300);
-    });
+      // 右鍵時暫停移動
+      isContextMenuOpen = true;
+      
+      // 檢查當前是否為 idle_sleeping 狀態
+      if (currentState === 'idle_sleeping') {
+        console.log('從 idle_sleeping 狀態喚醒，播放 awake 動畫');
+        setPetState('awake');
+        
+        // awake 動畫播放一段時間後切換到 serious (8幀 * 200ms = 1600ms + 緩衝)
+        setTimeout(() => {
+          if (isContextMenuOpen) { // 確保選單仍然開啟
+            console.log('awake 動畫完成，切換到 serious 狀態');
+            setPetState('serious');
+          }
+        }, 1800); // 1.8秒後切換到 serious，讓用戶能清楚看到 awake 動畫
+      } else {
+        // 其他狀態直接使用 serious 動畫
+        setPetState('serious');
+      }
+      
+      // 直接顯示原生選單
+      if (window.electronAPI) {
+        window.electronAPI.showContextMenu();
+      }
+      
+      console.log('顯示右鍵選單，桌寵暫停移動');
+    }
+
+    // 綁定右鍵事件處理 - 使用原生選單
+    petElement.addEventListener('contextmenu', handleContextMenu);
     
     // 啟動
     setTimeout(() => {
@@ -380,6 +511,22 @@
         setPetState('walk');
         setInterval(move, 50); // 移動更新
         setInterval(animateFrames, 100); // 動畫更新
+        
+        // 實際重置選單狀態的函數
+        function resetContextMenu() {
+          console.log('安全檢查：選單狀態可能異常，已自動重置');
+          isContextMenuOpen = false;
+          if (typeof closeContextMenu === 'function') {
+            closeContextMenu();
+          }
+        }
+        
+        setInterval(() => {
+          // 如果選單開啟超過 10 秒，可能有問題，自動重置
+          if (isContextMenuOpen) {
+            resetContextMenu();
+          }
+        }, 10000);
         
         // 初始化滑鼠穿透狀態
         window.electronAPI.setMouseThrough(true);
@@ -394,6 +541,135 @@
             }
           });
         }
+        
+        // 監聽主進程的選單操作訊息
+        if (window.electronAPI.onPetBounce) {
+          window.electronAPI.onPetBounce(() => {
+            setPetState('bounce');
+            setTimeout(() => setPetState('walk'), 500);
+          });
+        }
+        
+        if (window.electronAPI.onTogglePermanentPause) {
+          window.electronAPI.onTogglePermanentPause((event, pauseState) => {
+            isPaused = pauseState;
+            isTemporaryPaused = false;
+            if (pauseState) {
+              // 手動暫停時使用 idle_sleeping 動畫
+              isManuallyPaused = true;
+              setPetState('idle_sleeping');
+              console.log('桌寵已暫停，進入 idle_sleeping 狀態');
+            } else {
+              isManuallyPaused = false;
+              setPetState('walk');
+              console.log('桌寵已恢復移動');
+            }
+          });
+        }
+        
+        // 新增：監聽統一的暫停狀態更新
+        if (window.electronAPI.onUpdatePauseState) {
+          window.electronAPI.onUpdatePauseState((event, shouldPause) => {
+            isTemporaryPaused = shouldPause;
+            console.log('桌寵暫停狀態更新:', shouldPause ? '暫停' : '恢復');
+            if (shouldPause) {
+              // 如果是因為視窗開啟而暫停，使用 serious 動畫
+              // 如果是因為右鍵選單而暫停，保持當前動畫不變
+              if (!isContextMenuOpen && !isManuallyPaused) {
+                setPetState('serious');
+              }
+            } else if (!isPaused) { // 只有在非永久暫停時才恢復移動
+              // 如果不是手動暫停，才恢復到 walk 狀態
+              if (!isManuallyPaused) {
+                setPetState('walk');
+              }
+            }
+          });
+        }
+        
+        // 監聽焦點切換事件
+        if (window.electronAPI.onFocusChanged) {
+          window.electronAPI.onFocusChanged((event, appName) => {
+            console.log('應用焦點切換到:', appName);
+            // 焦點切換時的處理可以在這裡添加
+          });
+        }
+        
+        if (window.electronAPI.onDesktopFocused) {
+          window.electronAPI.onDesktopFocused(() => {
+            console.log('桌面獲得焦點 - 桌寵保持原狀態');
+            // 不改變移動狀態，只記錄焦點狀態
+          });
+        }
+        
+        // 監聽視窗重新獲得焦點
+        window.addEventListener('focus', () => {
+          console.log('桌寵視窗重新獲得焦點');
+          // 安全重置：如果選單狀態異常，重置它
+          if (isContextMenuOpen) {
+            console.log('安全重置：重置選單狀態');
+            isContextMenuOpen = false;
+          }
+          // 不需要特別處理，桌寵會根據原本的狀態繼續運作
+        });
+        
+        // 監聽右鍵選單關閉事件
+        if (window.electronAPI.onContextMenuClosed) {
+          window.electronAPI.onContextMenuClosed(() => {
+            console.log('=== 右鍵選單已關閉 ===');
+            console.log('關閉前 isContextMenuOpen:', isContextMenuOpen);
+            console.log('isMouseOver:', isMouseOver);
+            isContextMenuOpen = false;
+            
+            // 完全重新初始化整個事件系統
+            console.log('完全重新初始化事件系統');
+            
+            // 移除所有滑鼠事件監聽器
+            petElement.removeEventListener('contextmenu', handleContextMenu);
+            petElement.removeEventListener('mouseenter', handleMouseEnter);
+            petElement.removeEventListener('mouseleave', handleMouseLeave);
+            
+            // 強制重置所有狀態
+            isMouseOver = false;
+            dragging = false;
+            
+            // 強制重置滑鼠狀態
+            if (window.electronAPI.forceResetMouseState) {
+              console.log('執行強制重置滑鼠狀態');
+              window.electronAPI.forceResetMouseState();
+            }
+            
+            // 延遲重新綁定所有事件監聽器
+            setTimeout(() => {
+              console.log('重新綁定所有事件監聽器');
+              petElement.addEventListener('contextmenu', handleContextMenu);
+              petElement.addEventListener('mouseenter', handleMouseEnter);
+              petElement.addEventListener('mouseleave', handleMouseLeave);
+              
+              // 模擬 mouseenter 重置狀態
+              console.log('模擬 mouseenter 重置狀態');
+              handleMouseEnter();
+            }, 100);
+            
+            // 如果沒有其他暫停狀態，恢復移動（不考慮桌面焦點）
+            if (!isPaused && !isTemporaryPaused) {
+              console.log('恢復桌寵移動');
+              setPetState('walk');
+            } else {
+              console.log('不恢復移動，isPaused:', isPaused, 'isTemporaryPaused:', isTemporaryPaused, 'isManuallyPaused:', isManuallyPaused);
+              // 如果是手動暫停，保持 idle_sleeping 狀態
+              if (isManuallyPaused) {
+                setPetState('idle_sleeping');
+              }
+            }
+          });
+        }
+
+        window.electronAPI?.notify({
+          type: 'pet-ready',
+          body: 'hello'
+        });
+        
       } else {
         console.error('electronAPI not found');
         petSprite.src = defaultSprite;

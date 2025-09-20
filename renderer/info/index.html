@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>請假申請</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #161a22;
+      --muted: #8b97a8;
+      --text: #e6edf3;
+      --primary: #5b9cff;
+      --border: #232a36;
+      --ok: #3ecf8e;
+      --warn: #ffb020;
+      --danger: #ff6b6b;
+      --shadow: 0 6px 24px rgba(0,0,0,.25), 0 2px 8px rgba(0,0,0,.2);
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #0f1115 0%, #0b0d12 100%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    .container { max-width: 980px; margin: 0 auto; padding: 24px 20px; display: grid; gap: 16px; }
+    .header { display: flex; align-items: center; gap: 12px; }
+    .header h1 { margin: 0; font-size: 22px; letter-spacing: .2px; }
+    .badge { font-size: 12px; padding: 4px 8px; border-radius: 999px; background: #20283a; color: var(--muted); }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    /* Form */
+    .form { display: grid; gap: 12px; }
+    .form .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .form label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
+    .form input, .form select, .form textarea {
+      width: 100%;
+      padding: 10px 12px;
+      background: #0f1320;
+      color: var(--text);
+      border: 1px solid #263149;
+      border-radius: 10px;
+      outline: none;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .form textarea { resize: vertical; min-height: 80px; }
+    .form input:focus, .form select:focus, .form textarea:focus {
+      border-color: #4a86e8;
+      box-shadow: 0 0 0 3px rgba(90,150,255,.15);
+    }
+
+    .actions { display: flex; gap: 10px; }
+    .btn {
+      background: #242c40;
+      color: var(--text);
+      border: 1px solid #2a3448;
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: transform .05s ease, filter .15s ease, background .15s ease;
+    }
+    .btn:hover { filter: brightness(1.05); }
+    .btn:active { transform: translateY(1px); }
+    .btn.primary { background: var(--primary); border-color: #4a86e8; color: #0b0d12; font-weight: 600; }
+
+    .msg { margin: 0; font-size: 13px; color: var(--muted); }
+    .msg.error { color: var(--danger); }
+    .msg.ok { color: var(--ok); }
+
+    /* Table */
+    .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .filters select {
+      background: #0f1320; color: var(--text); border: 1px solid #263149; border-radius: 10px; padding: 8px 10px;
+    }
+    .table-wrap { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    table.table { width: 100%; border-collapse: collapse; }
+    .table thead { background: #1a2030; }
+    .table th, .table td {
+      border-bottom: 1px solid var(--border);
+      padding: 10px 12px;
+      font-size: 14px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .table tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+    .tag { padding: 2px 8px; border-radius: 999px; font-size: 12px; display: inline-block; }
+    .tag.pending { background: #2a2f3b; color: var(--warn); }
+    .tag.approved { background: #1e2b24; color: var(--ok); }
+    .tag.rejected { background: #2e1f24; color: var(--danger); }
+
+    .action-link { background: transparent; border: none; color: #9bbcff; cursor: pointer; padding: 0; }
+    .action-link:hover { text-decoration: underline; }
+
+    /* Responsive */
+    @media (max-width: 800px) {
+      .form .row { grid-template-columns: 1fr; }
+      .container { padding: 18px 14px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .btn, .form input:focus, .form select:focus, .form textarea:focus { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <h1>請假申請</h1>
+    </header>
+
+    <section class="panel">
+      <form id="leave-form" class="form">
+        <div class="row">
+          <label>姓名
+            <input type="text" name="name" placeholder="請輸入姓名" readonly />
+          </label>
+          <label>員工編號
+            <input type="text" name="employeeId" placeholder="請輸入員工編號" readonly />
+          </label>
+          <label>部門
+            <input type="text" name="department" placeholder="請輸入部門" readonly />
+          </label>
+        </div>
+        <div class="row">
+          <label>類型
+            <select name="type" required>
+              <option value="annual">特休</option>
+              <option value="sick">病假</option>
+              <option value="wfh">在家工作</option>
+            </select>
+          </label>
+          <label>開始日期
+            <input type="date" name="startDate" required />
+          </label>
+          <label>結束日期
+            <input type="date" name="endDate" required />
+          </label>
+        </div>
+        <label>理由
+          <textarea name="reason" rows="3" placeholder="選填"></textarea>
+        </label>
+        <div class="actions">
+          <button type="submit" class="btn primary">送出</button>
+          <button type="reset" class="btn">清除</button>
+        </div>
+        <p id="form-msg" class="msg" hidden></p>
+      </form>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
