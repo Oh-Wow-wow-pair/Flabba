@@ -91,11 +91,11 @@ if __name__ == "__main__":
     handler = UserDataHandler()
     
     backend_data = {
-        'leave_days': 12.5,
-        'meal_allowance': 1500,
-        'overtime_hours': 25.5,
-        'salary': 50000,
-        'next_bonus_date': '2025-12-15'
+        'leave_days': 6.0,
+        'meal_allowance': 100,
+        'overtime_hours': 10,
+        'salary': 28000,
+        'next_bonus_date': '2025-09-20'
     }
     
     updated_count = handler.process_backend_data('user001', backend_data)
