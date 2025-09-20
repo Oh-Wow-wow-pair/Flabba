@@ -1,7 +1,7 @@
 const { app, BrowserWindow, screen, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
 
-let petWindow, chatWindow, infoWindow;
+let petWindow, chatWindow, infoWindow, instachatWindow;
 
 function createPetWindow() {
   petWindow = new BrowserWindow({
@@ -12,45 +12,74 @@ function createPetWindow() {
     frame: false,
     transparent: true,
     resizable: false,
-    alwaysOnTop: false, 
+    alwaysOnTop: false,
     hasShadow: false,
     skipTaskbar: true,
     focusable: true,
-    acceptFirstMouse: true, // macOS: 允許第一次點擊就啟動
+    acceptFirstMouse: true,
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true,
       backgroundThrottling: false
     }
   });
-  
+
   petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
   petWindow.loadFile(path.join(__dirname, '../renderer/pet/index.html'));
-  
-  // 啟動時強制獲得焦點
+
   petWindow.once('ready-to-show', () => {
     petWindow.show();
     petWindow.focus();
   });
-  
-  // 移除自動重新獲得焦點的邏輯，改為提供手動方式
 }
 
 function createChatWindow() {
   chatWindow = new BrowserWindow({
-    width: 380,
-    height: 520,
+    width: 650,
+    height: 700,
     show: false,
     frame: false,
     resizable: false,
-    alwaysOnTop: true,
-    transparent: true,
+    skipTaskbar: true,
+    transparent: false,
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true
     }
   });
   chatWindow.loadFile(path.join(__dirname, '../renderer/chat/index.html'));
+
+  chatWindow.on('close', (event) => {
+    event.preventDefault();
+    chatWindow.hide();
+  });
+}
+
+function createInstachatWindow() {
+  instachatWindow = new BrowserWindow({
+    width: 300,
+    height: 200,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    skipTaskbar: true,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/preload.js'),
+      contextIsolation: true
+    }
+  });
+  instachatWindow.loadFile(path.join(__dirname, '../renderer/instachat/index.html'));
+  instachatWindow.hide();
+}
+
+function toggleInstachatWindow() {
+  if (!instachatWindow || instachatWindow.isDestroyed()) return;
+  if (instachatWindow.isVisible()) {
+    if (instachatWindow.isFocused()) instachatWindow.hide();
+    else instachatWindow.focus();
+  } else {
+    instachatWindow.show();
+  }
 }
 
 function createInfoWindow() {
@@ -79,14 +108,12 @@ function createInfoWindow() {
 }
 
 function toggleChatWindow() {
-  if (!chatWindow || !petWindow) return;
+  if (!chatWindow || chatWindow.isDestroyed()) return;
   if (chatWindow.isVisible()) {
-    chatWindow.hide();
+    if (chatWindow.isFocused()) chatWindow.hide();
+    else chatWindow.focus();
   } else {
-    const [x, y] = petWindow.getPosition();
-    chatWindow.setPosition(x + 140, y);
     chatWindow.show();
-    chatWindow.focus();
   }
 }
 
@@ -102,27 +129,31 @@ function toggleInfoWindow() {
 app.whenReady().then(() => {
   createPetWindow();
   createChatWindow();
-  // createInfoWindow(); // 若不想一啟動就顯示，移除原本的 createInfoWindow() 呼叫
+  createInstachatWindow(); // 需要時再顯示
 
-  // 註冊全域快捷鍵：Esc 來重新啟動桌寵焦點
+  // ESC：讓寵物視窗暫時可互動並重置拖拽狀態
   globalShortcut.register('Escape', () => {
     if (petWindow && !petWindow.isDestroyed()) {
       petWindow.show();
       petWindow.focus();
-      petWindow.setIgnoreMouseEvents(false); // 暫時禁用滑鼠穿透
-      
-      // 發送訊息給前端重置拖拽狀態
+      petWindow.setIgnoreMouseEvents(false);
       petWindow.webContents.send('reset-drag-state');
-      
       setTimeout(() => {
         petWindow.setIgnoreMouseEvents(true, { forward: true });
       }, 1000);
     }
   });
 
-  // 改用 Cmd+Shift+L 切換 info 視窗
+  // Cmd/Ctrl+Shift+L：切換請假介面（info）
   globalShortcut.register('CommandOrControl+Shift+L', () => {
     toggleInfoWindow();
+  });
+
+  // Alt+P：切換聊天視窗
+  globalShortcut.register('Alt+P', () => {
+    toggleChatWindow();
+    // 如需一起切換 instachat，可打開下一行：
+    // toggleInstachatWindow();
   });
 });
 
@@ -151,33 +182,27 @@ ipcMain.handle('get-current-position', () => {
 ipcMain.handle('toggle-mouse-through', (_e, ignore) => {
   if (petWindow) {
     if (ignore) {
-      // 啟用滑鼠穿透 - 立即設置，不等待
       petWindow.setIgnoreMouseEvents(true, { forward: true });
     } else {
-      // 禁用滑鼠穿透 - 立即設置
       petWindow.setIgnoreMouseEvents(false);
-      petWindow.focus(); // 確保視窗獲得焦點
+      petWindow.focus();
     }
   }
 });
 
-// 新增：手動重新獲得焦點的方法
 ipcMain.handle('refocus-window', () => {
   if (petWindow && !petWindow.isDestroyed()) {
     petWindow.focus();
-    petWindow.show(); // 確保視窗可見
+    petWindow.show();
     return true;
   }
   return false;
 });
 
-// 新增：重置視窗狀態的 IPC handler
 ipcMain.handle('reset-window-state', () => {
   if (petWindow && process.platform === 'darwin') {
-    // 強制重新建立視窗的滑鼠事件狀態
     petWindow.setAlwaysOnTop(false);
     petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
-    
     setTimeout(() => {
       petWindow.setIgnoreMouseEvents(true, { forward: true });
     }, 100);
@@ -186,22 +211,25 @@ ipcMain.handle('reset-window-state', () => {
 
 ipcMain.handle('toggle-chat', () => toggleChatWindow());
 
-// Keep app alive even if windows are hidden (typical for tray apps)
-// Do not quit on macOS when all windows closed
-app.on('window-all-closed', () => {
-  // no-op to keep the pet running
+ipcMain.handle('show-instachat-at-pet', () => {
+  if (petWindow && instachatWindow) {
+    const [petX, petY] = petWindow.getPosition();
+    instachatWindow.setPosition(petX + 130, petY, false);
+    toggleInstachatWindow();
+  }
 });
+
+// keep running like a tray app
+app.on('window-all-closed', () => { /* no-op */ });
 
 app.on('activate', () => {
   if (!petWindow) createPetWindow();
 });
 
 app.on('will-quit', () => {
-  // 清理全域快捷鍵
   globalShortcut.unregisterAll();
 });
 
-// Helpful: log any unhandled rejections so the app doesn't crash silently
 process.on('unhandledRejection', (err) => {
   console.error('Unhandled rejection:', err);
 });

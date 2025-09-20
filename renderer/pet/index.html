@@ -188,19 +188,27 @@
     petElement.addEventListener('mousedown', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      
-      console.log('Mouse down - starting drag');
-      
-      // 立即設置拖拽狀態
-      dragging = true;
-      window.lastDragStart = Date.now();
-      mouseStartX = e.clientX;
-      mouseStartY = e.clientY;
-      setPetState('idle');
-      
-      // 立即禁用滑鼠穿透
-      if (window.electronAPI) {
-        window.electronAPI.setMouseThrough(false);
+
+      // check for left click
+      if (e.button === 0) {
+        console.log('Mouse down - starting drag');
+        
+        // 立即設置拖拽狀態
+        dragging = true;
+        window.lastDragStart = Date.now();
+        mouseStartX = e.clientX;
+        mouseStartY = e.clientY;
+        setPetState('idle');
+        
+        // 立即禁用滑鼠穿透
+        if (window.electronAPI) {
+          window.electronAPI.setMouseThrough(false);
+        }
+      }
+
+      // check for right click
+      if (e.button === 2) {
+        window.electronAPI.showInstachatAtPet();
       }
     });    // 防止圖片拖拽
     petSprite.addEventListener('dragstart', (e) => {
@@ -242,6 +250,10 @@
 
     // 快速響應的 mouseup 處理
     window.addEventListener('mouseup', (e) => {
+      if (e.button === 2) {
+        return; // 右鍵不處理
+      }
+      
       if (dragging) {
         console.log('Mouse up - ending drag');
         
