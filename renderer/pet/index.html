@@ -42,6 +42,44 @@
   </div>
   
   <script>
+    // 手繪 PNG 圖檔配置 - 根據 README.md 說明
+    const handdrawnSprites = {
+      // 睡覺待機動畫：1-6 循環
+      idle: [
+        'sprites/idle_sleeping/idle_sleeping_1.PNG',
+        'sprites/idle_sleeping/idle_sleeping_2.PNG',
+        'sprites/idle_sleeping/idle_sleeping_3.PNG',
+        'sprites/idle_sleeping/idle_sleeping_4.PNG',
+        'sprites/idle_sleeping/idle_sleeping_5.PNG',
+        'sprites/idle_sleeping/idle_sleeping_6.PNG'
+      ],
+      // 行走動畫：1-7 循環（面向左，可自動翻轉）
+      walk: [
+        'sprites/walking/walking_1.PNG',
+        'sprites/walking/walking_2.PNG',
+        'sprites/walking/walking_3.PNG',
+        'sprites/walking/walking_4.PNG',
+        'sprites/walking/walking_5.PNG',
+        'sprites/walking/walking_6.PNG',
+        'sprites/walking/walking_7.PNG'
+      ],
+      // 清醒動畫：1-8 (滑鼠點擊叫醒時使用)
+      awake: [
+        'sprites/awake/awake_1.PNG',
+        'sprites/awake/awake_2.PNG',
+        'sprites/awake/awake_3.PNG',
+        'sprites/awake/awake_4.PNG',
+        'sprites/awake/awake_5.PNG',
+        'sprites/awake/awake_6.PNG',
+        'sprites/awake/awake_7.PNG',
+        'sprites/awake/awake_8.PNG'
+      ],
+      // 彈跳動畫（暫時使用第一幀）
+      bounce: ['sprites/walking/walking_1.PNG'],
+      // 睡覺動畫（使用 idle_sleeping 的第一幀）
+      sleep: ['sprites/idle_sleeping/idle_sleeping_1.PNG']
+    };
+    
     // PNG/SVG 圖檔配置 - 目前使用SVG，但支援PNG
     const sprites = {
       idle: ['sprites/idle_1.svg', 'sprites/idle_2.svg'],
@@ -86,34 +124,37 @@
     let isDesktopFocused = false; // 追蹤是否為桌面焦點狀態
     let isContextMenuOpen = false; // 追蹤右鍵選單是否開啟
     
-    function loadSprite(spritePath, fallbackPath, finalFallback) {
+    function loadSprite(...spritePaths) {
       return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve(spritePath);
-        img.onerror = () => {
-          if (fallbackPath) {
-            const fallbackImg = new Image();
-            fallbackImg.onload = () => resolve(fallbackPath);
-            fallbackImg.onerror = () => resolve(finalFallback);
-            fallbackImg.src = fallbackPath;
-          } else {
-            resolve(finalFallback);
+        function tryLoadSprite(index) {
+          if (index >= spritePaths.length) {
+            resolve(defaultSprite); // 如果所有路徑都失敗，使用預設
+            return;
           }
-        };
-        img.src = spritePath;
+          
+          const img = new Image();
+          img.onload = () => resolve(spritePaths[index]);
+          img.onerror = () => tryLoadSprite(index + 1); // 嘗試下一個
+          img.src = spritePaths[index];
+        }
+        
+        tryLoadSprite(0);
       });
     }
     
     async function updateSprite() {
+      // 優先使用手繪圖片，然後是 PNG，最後是 SVG
+      const handdrawnStateSprites = handdrawnSprites[currentState] || handdrawnSprites.idle;
       const stateSprites = sprites[currentState] || sprites.idle;
       const pngStateSprites = pngSprites[currentState] || pngSprites.idle;
       
-      const spriteIndex = animationFrame % stateSprites.length;
-      const svgSprite = stateSprites[spriteIndex];
-      const pngSprite = pngStateSprites[spriteIndex];
+      const spriteIndex = animationFrame % handdrawnStateSprites.length;
+      const handdrawnSprite = handdrawnStateSprites[spriteIndex];
+      const svgSprite = stateSprites[spriteIndex % stateSprites.length];
+      const pngSprite = pngStateSprites[spriteIndex % pngStateSprites.length];
       
-      // 先嘗試載入PNG，如果失敗則使用SVG
-      const finalSprite = await loadSprite(pngSprite, svgSprite, defaultSprite);
+      // 優先順序：手繪 PNG -> 一般 PNG -> SVG -> 預設
+      const finalSprite = await loadSprite(handdrawnSprite, pngSprite, svgSprite);
       petSprite.src = finalSprite;
     }
     
