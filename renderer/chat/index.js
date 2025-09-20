@@ -33,13 +33,9 @@ function appendMessage(message, fromUser = false) {
     list_div.appendChild(cell);
 
     if (!fromUser) {
-        deleteSkeleton();
         const emptyCell = document.createElement('div');
         emptyCell.className = 'cell';
         list_div.appendChild(emptyCell);
-    }
-    else {
-        appendSkeleton();
     }
 
     list_div.scrollTop = list_div.scrollHeight;
@@ -54,11 +50,24 @@ send_btn.addEventListener('click', async (event) => {
     appendMessage(userMessage, true);
     input_div.value = '';
 
-    // Simulate a response from the assistant
-    setTimeout(() => {
-        const assistantMessage = '這是回覆訊息的範例。';
-        appendMessage(assistantMessage, false);
-    }, 1500);
+    // Call Groq
+    appendSkeleton();
+    await window.electronAPI.messageToAi(userMessage)
+        .then((assistantMessage) => {
+            if (assistantMessage) {
+                console.log('Received assistant message:', assistantMessage);
+                deleteSkeleton();
+                appendMessage(assistantMessage, false);
+            }
+        })
+        .catch((err) => {
+            console.error('Error from Groq:', err);
+            deleteSkeleton();
+            appendMessage('抱歉，無法取得回覆。請稍後再試。', false);
+        });
+
+    // deleteSkeleton();
+    // appendMessage(assistantMessage, false);
 
     event.preventDefault();
 });

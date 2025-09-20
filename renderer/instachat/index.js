@@ -35,13 +35,9 @@ function appendMessage(message, fromUser = false) {
     instalist_div.appendChild(cell);
 
     if (!fromUser) {
-        deleteSkeleton();
         const emptyCell = document.createElement('div');
         emptyCell.className = 'cell';
         instalist_div.appendChild(emptyCell);
-    }
-    else {
-        appendSkeleton();
     }
 
     instalist_div.scrollTop = instalist_div.scrollHeight;
@@ -56,11 +52,21 @@ instasend_btn.addEventListener('click', async (event) => {
     appendMessage(userMessage, true);
     instainput_div.value = '';
 
-    // Simulate a response from the assistant
-    setTimeout(() => {
-        const assistantMessage = '這是回覆訊息的範例。';
-        appendMessage(assistantMessage, false);
-    }, 1500);
+    // Call API
+    appendSkeleton();
+    await window.electronAPI.messageToAi(userMessage)
+        .then((assistantMessage) => {
+            if (assistantMessage) {
+                console.log('Received assistant message:', assistantMessage);
+                deleteSkeleton();
+                appendMessage(assistantMessage, false);
+            }
+        })
+        .catch((err) => {
+            console.error('Error from Groq:', err);
+            deleteSkeleton();
+            appendMessage('抱歉，無法取得回覆。請稍後再試。', false);
+        });
 
     event.preventDefault();
 });
