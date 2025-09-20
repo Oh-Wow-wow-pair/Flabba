@@ -5,6 +5,8 @@ const { time } = require('console');
 
 let petWindow, chatWindow, instachatWindow, infoWindow;
 let isPetPaused = false; // 追蹤桌寵暫停狀態
+let isContextMenuOpen = false; // 追蹤右鍵選單狀態
+let isAnyWindowOpen = false; // 追蹤是否有視窗開啟
 let focusWatcher = null; // 焦點監聽器
 
 // 監聽前台應用變化
@@ -31,13 +33,27 @@ function startFocusWatcher() {
 function createContextMenu() {
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: '開啟對話框',
+      label: '開啟 chatWindow',
       click: () => {
         // 選單項目被點擊時立即通知選單關閉
         if (petWindow) {
           petWindow.webContents.send('context-menu-closed');
         }
         toggleChatWindow();
+        // 通知渲染進程執行bounce動畫
+        if (petWindow) {
+          petWindow.webContents.send('pet-bounce');
+        }
+      }
+    },
+    {
+      label: '開啟 instachatWindow',
+      click: () => {
+        // 選單項目被點擊時立即通知選單關閉
+        if (petWindow) {
+          petWindow.webContents.send('context-menu-closed');
+        }
+        toggleInstachatWindow();
         // 通知渲染進程執行bounce動畫
         if (petWindow) {
           petWindow.webContents.send('pet-bounce');
@@ -61,6 +77,22 @@ function createContextMenu() {
     }
   ]);
   return contextMenu;
+}
+
+// 更新桌寵暫停狀態
+function updatePetPauseState() {
+  const shouldPause = isPetPaused || isContextMenuOpen || isAnyWindowOpen;
+  if (petWindow) {
+    petWindow.webContents.send('update-pause-state', shouldPause);
+  }
+}
+
+// 更新 instachatWindow 位置跟隨桌寵
+function updateInstachatPosition() {
+  if (instachatWindow && !instachatWindow.isDestroyed() && instachatWindow.isVisible() && petWindow) {
+    const [petX, petY] = petWindow.getPosition();
+    instachatWindow.setPosition(petX + 128, petY, false);
+  }
 }
 
 function createPetWindow() {
@@ -111,6 +143,9 @@ function createPetWindow() {
       petWindow.setPosition(safeX, safeY, false);
       console.log(`桌寵被移回安全位置: (${safeX}, ${safeY})`);
     }
+    
+    // 更新 instachatWindow 位置跟隨桌寵
+    updateInstachatPosition();
   });
   
   // 啟動時強制獲得焦點
@@ -137,15 +172,29 @@ function createChatWindow() {
   chatWindow.loadFile(path.join(__dirname, '../renderer/chat/index.html'));
 
   chatWindow.on('show', () => {
-    if (instachatWindow && !instachatWindow.isDestroyed()) instachatWindow.hide();
+    // 隱藏 instachatWindow
+    if (instachatWindow && instachatWindow.isVisible()) {
+      instachatWindow.hide();
+    }
+    isAnyWindowOpen = true;
+    updatePetPauseState();
   });
+  
   chatWindow.on('focus', () => {
-    if (instachatWindow && !instachatWindow.isDestroyed()) instachatWindow.hide();
+    // 隱藏 instachatWindow
+    if (instachatWindow && instachatWindow.isVisible()) {
+      instachatWindow.hide();
+    }
   });
 
   chatWindow.on('close', (event) => {
     event.preventDefault();
     chatWindow.hide();
+  });
+  
+  chatWindow.on('hide', () => {
+    isAnyWindowOpen = false;
+    updatePetPauseState();
   });
 }
 
@@ -164,14 +213,43 @@ function createInstachatWindow() {
   });
   instachatWindow.loadFile(path.join(__dirname, '../renderer/instachat/index.html'));
   instachatWindow.hide();
+  
+  instachatWindow.on('show', () => {
+    // 隱藏 chatWindow
+    if (chatWindow && chatWindow.isVisible()) {
+      chatWindow.hide();
+    }
+    isAnyWindowOpen = true;
+    updatePetPauseState();
+  });
+  
+  instachatWindow.on('hide', () => {
+    isAnyWindowOpen = false;
+    updatePetPauseState();
+  });
 }
 
 function toggleInstachatWindow() {
   if (!instachatWindow || instachatWindow.isDestroyed()) return;
+  
   if (instachatWindow.isVisible()) {
-    if (instachatWindow.isFocused()) instachatWindow.hide();
-    else instachatWindow.focus();
+    if (instachatWindow.isFocused()) {
+      instachatWindow.hide();
+    } else {
+      instachatWindow.focus();
+    }
   } else {
+    // 隱藏 chatWindow
+    if (chatWindow && chatWindow.isVisible()) {
+      chatWindow.hide();
+    }
+    
+    // 設置位置在桌寵右上角
+    if (petWindow) {
+      const [petX, petY] = petWindow.getPosition();
+      instachatWindow.setPosition(petX + 128, petY, false); // 128是桌寵窗口寬度
+    }
+    
     instachatWindow.show();
   }
 }
@@ -203,10 +281,28 @@ function createInfoWindow() {
 
 function toggleChatWindow() {
   if (!chatWindow || chatWindow.isDestroyed()) return;
+  
   if (chatWindow.isVisible()) {
-    if (chatWindow.isFocused()) chatWindow.hide();
-    else chatWindow.focus();
+    if (chatWindow.isFocused()) {
+      chatWindow.hide();
+    } else {
+      chatWindow.focus();
+    }
   } else {
+    // 隱藏 instachatWindow
+    if (instachatWindow && instachatWindow.isVisible()) {
+      instachatWindow.hide();
+    }
+    
+    // 設置位置在螢幕中心
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width: screenWidth, height: screenHeight } = primaryDisplay.workArea;
+    const windowWidth = 650;
+    const windowHeight = 700;
+    const centerX = Math.round((screenWidth - windowWidth) / 2);
+    const centerY = Math.round((screenHeight - windowHeight) / 2);
+    
+    chatWindow.setPosition(centerX, centerY, false);
     chatWindow.show();
   }
 }
@@ -367,7 +463,11 @@ ipcMain.handle('get-displays', () => {
 });
 
 ipcMain.handle('move-window', (_e, { x, y }) => {
-  if (petWindow) petWindow.setPosition(Math.round(x), Math.round(y), false);
+  if (petWindow) {
+    petWindow.setPosition(Math.round(x), Math.round(y), false);
+    // 立即更新 instachatWindow 位置
+    updateInstachatPosition();
+  }
 });
 
 ipcMain.handle('get-current-position', () => {
@@ -421,19 +521,35 @@ ipcMain.handle('toggle-chat', () => toggleChatWindow());
 
 ipcMain.handle('show-instachat-at-pet', () => {
   if (petWindow && instachatWindow) {
+    // 隱藏 chatWindow
+    if (chatWindow && chatWindow.isVisible()) {
+      chatWindow.hide();
+    }
+    
     const [petX, petY] = petWindow.getPosition();
-    instachatWindow.setPosition(petX + 130, petY, false);
-    toggleInstachatWindow();
+    instachatWindow.setPosition(petX + 128, petY, false); // 統一使用128
+    
+    if (!instachatWindow.isVisible()) {
+      instachatWindow.show();
+    } else {
+      instachatWindow.focus();
+    }
   }
 });
 
 // 顯示原生右鍵選單
 ipcMain.handle('show-context-menu', (event) => {
+  isContextMenuOpen = true;
+  updatePetPauseState(); // 選單開啟時暫停桌寵
+  
   const menu = createContextMenu();
   menu.popup({ 
     window: petWindow,
     callback: () => {
-      // 選單關閉時通知渲染進程
+      // 選單關閉時通知渲染進程並恢復桌寵狀態
+      isContextMenuOpen = false;
+      updatePetPauseState();
+      
       if (petWindow) {
         petWindow.webContents.send('context-menu-closed');
       }

@@ -263,8 +263,18 @@
         // 立即設置拖拽狀態
         dragging = true;
         window.lastDragStart = Date.now();
-        mouseStartX = e.clientX;
-        mouseStartY = e.clientY;
+        
+        // 計算鼠標相對於桌寵的偏移量
+        const rect = petElement.getBoundingClientRect();
+        const petCenterX = rect.left + rect.width / 2;
+        const petCenterY = rect.top + rect.height / 2;
+        
+        // 記錄鼠標相對於桌寵中心的偏移
+        window.dragOffsetX = e.clientX - petCenterX;
+        window.dragOffsetY = e.clientY - petCenterY;
+        
+        console.log('Drag offset:', window.dragOffsetX, window.dragOffsetY);
+        
         setPetState('idle');
         
         // 立即禁用滑鼠穿透
@@ -289,30 +299,23 @@
       return false;
     });
     
-    // 節流的拖拽移動處理
-    let moveTimeout = null;
+    // 實時拖拽移動處理 - 讓桌寵跟隨鼠標
     window.addEventListener('mousemove', (e) => {
-      if (dragging && mouseStartX !== undefined && mouseStartY !== undefined) {
-        const deltaX = e.clientX - mouseStartX;
-        const deltaY = e.clientY - mouseStartY;
+      if (dragging) {
+        // 計算桌寵應該移動到的位置（鼠標位置減去偏移量）
+        const targetX = e.screenX - window.dragOffsetX - 64; // 64 是窗口一半寬度
+        const targetY = e.screenY - window.dragOffsetY - 64; // 64 是窗口一半高度
         
-        // 立即更新位置變數
-        x += deltaX;
-        y += deltaY;
-        mouseStartX = e.clientX;
-        mouseStartY = e.clientY;
+        console.log('Mouse at:', e.screenX, e.screenY, 'Moving window to:', targetX, targetY);
         
-        // 節流視窗移動請求
-        if (moveTimeout) {
-          clearTimeout(moveTimeout);
+        // 立即移動窗口，不使用節流
+        if (window.electronAPI) {
+          window.electronAPI.moveWindow(targetX, targetY);
         }
         
-        moveTimeout = setTimeout(() => {
-          if (window.electronAPI) {
-            window.electronAPI.moveWindow(x, y);
-          }
-          moveTimeout = null;
-        }, 8); // 8ms 節流，約 120fps
+        // 更新內部位置記錄
+        x = targetX;
+        y = targetY;
       }
     });
 
@@ -327,8 +330,8 @@
         
         // 立即重置拖拽狀態
         dragging = false;
-        mouseStartX = undefined;
-        mouseStartY = undefined;
+        window.dragOffsetX = undefined;
+        window.dragOffsetY = undefined;
         setPetState('walk');
         
         // 根據滑鼠位置決定穿透狀態
@@ -351,8 +354,8 @@
         
         // 立即重置拖拽狀態
         dragging = false;
-        mouseStartX = undefined;
-        mouseStartY = undefined;
+        window.dragOffsetX = undefined;
+        window.dragOffsetY = undefined;
         setPetState('walk');
         
         // 滑鼠在寵物上，保持可互動
@@ -366,8 +369,8 @@
     window.addEventListener('blur', () => {
       if (dragging) {
         dragging = false;
-        mouseStartX = undefined;
-        mouseStartY = undefined;
+        window.dragOffsetX = undefined;
+        window.dragOffsetY = undefined;
         if (window.electronAPI) {
           window.electronAPI.setMouseThrough(true);
         }
@@ -379,8 +382,8 @@
     setInterval(() => {
       if (dragging && window.lastDragStart && (Date.now() - window.lastDragStart > 10000)) {
         dragging = false;
-        mouseStartX = undefined;
-        mouseStartY = undefined;
+        window.dragOffsetX = undefined;
+        window.dragOffsetY = undefined;
         if (window.electronAPI) {
           window.electronAPI.setMouseThrough(true);
         }
@@ -497,6 +500,19 @@
             } else {
               setPetState('walk');
               console.log('桌寵已恢復移動');
+            }
+          });
+        }
+        
+        // 新增：監聽統一的暫停狀態更新
+        if (window.electronAPI.onUpdatePauseState) {
+          window.electronAPI.onUpdatePauseState((event, shouldPause) => {
+            isTemporaryPaused = shouldPause;
+            console.log('桌寵暫停狀態更新:', shouldPause ? '暫停' : '恢復');
+            if (shouldPause) {
+              setPetState('idle');
+            } else if (!isPaused) { // 只有在非永久暫停時才恢復移動
+              setPetState('walk');
             }
           });
         }
