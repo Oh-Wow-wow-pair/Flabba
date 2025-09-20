@@ -73,6 +73,7 @@ function createInstachatWindow() {
     }
   });
   instachatWindow.loadFile(path.join(__dirname, '../renderer/instachat/index.html'));
+  instachatWindow.hide();
 }
 
 function toggleInstachatWindow() {
@@ -189,6 +190,14 @@ ipcMain.handle('reset-window-state', () => {
 });
 
 ipcMain.handle('toggle-chat', () => toggleChatWindow());
+
+ipcMain.handle('show-instachat-at-pet', () => {
+  if (petWindow && instachatWindow) {
+    const [petX, petY] = petWindow.getPosition();
+    instachatWindow.setPosition(petX + 130, petY, false);
+    toggleInstachatWindow();
+  }
+});
 
 // Keep app alive even if windows are hidden (typical for tray apps)
 // Do not quit on macOS when all windows closed
