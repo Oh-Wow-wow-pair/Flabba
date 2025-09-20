@@ -76,7 +76,7 @@ function createPetWindow() {
     skipTaskbar: true,
     focusable: true,
     acceptFirstMouse: true, // macOS: 允許第一次點擊就啟動
-    movable: false, // 防止被系統移動
+    movable: true, // 允許程式式移動視窗位置
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true,

@@ -121,7 +121,6 @@
     let lastInteractionTime = Date.now();
     let isPaused = false; // 永久暫停狀態（需手動恢復）
     let isTemporaryPaused = false; // 暫時停止狀態（右鍵可恢復）
-    let isDesktopFocused = false; // 追蹤是否為桌面焦點狀態
     let isContextMenuOpen = false; // 追蹤右鍵選單是否開啟
     
     function loadSprite(...spritePaths) {
@@ -450,12 +449,19 @@
         setInterval(move, 50); // 移動更新
         setInterval(animateFrames, 100); // 動畫更新
         
-        // 安全檢查：定期檢查選單狀態，防止卡住
+        // 實際重置選單狀態的函數
+        function resetContextMenu() {
+          console.log('安全檢查：選單狀態可能異常，已自動重置');
+          isContextMenuOpen = false;
+          if (typeof closeContextMenu === 'function') {
+            closeContextMenu();
+          }
+        }
+        
         setInterval(() => {
           // 如果選單開啟超過 10 秒，可能有問題，自動重置
           if (isContextMenuOpen) {
-            console.log('安全檢查：選單狀態可能異常，考慮重置');
-            // 這裡不直接重置，只是記錄，讓用戶知道狀態
+            resetContextMenu();
           }
         }, 10000);
         
@@ -506,7 +512,6 @@
         if (window.electronAPI.onDesktopFocused) {
           window.electronAPI.onDesktopFocused(() => {
             console.log('桌面獲得焦點 - 桌寵保持原狀態');
-            isDesktopFocused = true;
             // 不改變移動狀態，只記錄焦點狀態
           });
         }
@@ -514,7 +519,6 @@
         // 監聽視窗重新獲得焦點
         window.addEventListener('focus', () => {
           console.log('桌寵視窗重新獲得焦點');
-          isDesktopFocused = false;
           // 安全重置：如果選單狀態異常，重置它
           if (isContextMenuOpen) {
             console.log('安全重置：重置選單狀態');
