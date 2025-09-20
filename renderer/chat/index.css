@@ -5,6 +5,16 @@
     --bulma-link-l: 74%;
 }
 
+body, * {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE 10+ */
+}
+
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
 .section {
     padding: 1.5rem;
 }
