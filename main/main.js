@@ -2,7 +2,7 @@
 const { app, BrowserWindow, screen, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
 
-let petWindow, chatWindow;
+let petWindow, chatWindow, instachatWindow;
 
 function createPetWindow() {
   petWindow = new BrowserWindow({
@@ -59,6 +59,36 @@ function createChatWindow() {
   });
 }
 
+function createInstachatWindow() {
+  instachatWindow = new BrowserWindow({
+    width: 300,
+    height: 200,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    skipTaskbar: true,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/preload.js'),
+      contextIsolation: true
+    }
+  });
+  instachatWindow.loadFile(path.join(__dirname, '../renderer/instachat/index.html'));
+}
+
+function toggleInstachatWindow() {
+  if (instachatWindow.isVisible()) {
+    if (instachatWindow.isFocused()) {
+      instachatWindow.hide();
+    }
+    else {
+      instachatWindow.focus();
+    }
+  }
+  else {
+    instachatWindow.show();
+  }
+}
+
 function toggleChatWindow() {
   if (chatWindow.isVisible()) {
     if (chatWindow.isFocused()) {
@@ -76,7 +106,8 @@ function toggleChatWindow() {
 app.whenReady().then(() => {
   createPetWindow();
   createChatWindow();
-  
+  createInstachatWindow();
+
   // 註冊全域快捷鍵：Esc 來重新啟動桌寵焦點
   globalShortcut.register('Escape', () => {
     if (petWindow && !petWindow.isDestroyed()) {
@@ -95,6 +126,7 @@ app.whenReady().then(() => {
 
   globalShortcut.register('Alt+P', () => {
     toggleChatWindow();
+    // toggleInstachatWindow();
   });
 });
 

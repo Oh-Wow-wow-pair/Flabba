@@ -1,0 +1,72 @@
+:root {
+    --bulma-primary-h: 49deg;
+    --bulma-primary-l: 74%;
+    --bulma-link-h: 49deg;
+    --bulma-link-l: 74%;
+    background: #0000;
+}
+
+/* Hide scrollbars for all elements */
+body, * {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE 10+ */
+}
+
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+.section {
+    padding: 0.4rem;
+}
+
+.bubble {
+    padding: 0.3rem 0.5rem;
+    border-radius: 5px;
+}
+
+.bubble::after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 0;
+    border: 10px solid transparent;
+}
+
+.reply-bubble::after {
+	left: 0;
+	top: 50%;
+	border-right-color: #FFE77A;
+	border-left: 0;
+	border-top: 0;
+	margin-top: -10px;
+	margin-left: -7px;
+}
+
+.input-bubble::after {
+    right: 0;
+    top: 50%;
+    border-left-color: #242424;
+    border-right: 0;
+    border-top: 0;
+    margin-top: -10px;
+    margin-right: -7px;
+}
+
+.instachat-content {
+    margin-bottom: 3rem;
+}
+
+#instachat-list {
+  max-height: 8rem;
+  overflow-y: auto;
+}
+
+.input-bar {
+    position: fixed;
+    bottom: 1.2rem;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+}

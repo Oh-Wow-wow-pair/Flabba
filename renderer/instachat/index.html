@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Instachat Window</title>
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+  <section class="section instachat-content scroll-container">
+    <div class="fixed-grid has-4-cols" id="main-header">
+      <div class="grid" id="instachat-list">
+        <div class="cell is-col-span-3">
+          <div class="notification is-primary bubble reply-bubble">
+            test
+          </div>
+        </div>
+        <div class="cell"></div>
+      </div>
+    </div>
+  </section>
+  <section class="section input-bar">
+    <div class="field is-grouped">
+      <input id="instachat-input" class="input is-rounded is-small" type="text" placeholder="問問歐姆巴">
+      <button id="instachat-send" class="button is-primary is-rounded is-small">發送</button>
+    </div>
+  </section>
+  <script src="index.js"></script>
+</body>
+</html>
