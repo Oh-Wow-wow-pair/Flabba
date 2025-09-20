@@ -590,6 +590,12 @@
             }
           });
         }
+
+        window.electronAPI?.notify({
+          type: 'pet-ready',
+          body: 'hello'
+        });
+        
       } else {
         console.error('electronAPI not found');
         petSprite.src = defaultSprite;
