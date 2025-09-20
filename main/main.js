@@ -1,9 +1,31 @@
 
 const { app, BrowserWindow, screen, ipcMain, globalShortcut, Menu } = require('electron');
 const path = require('path');
+const { watchFrontmostApp, isDesktopProcess } = require('./macFrontmost');
 
 let petWindow, chatWindow, instachatWindow;
 let isPetPaused = false; // 追蹤桌寵暫停狀態
+let focusWatcher = null; // 焦點監聽器
+
+// 監聽前台應用變化
+function startFocusWatcher() {
+  if (focusWatcher) return; // 避免重複啟動
+  
+  focusWatcher = watchFrontmostApp((appName) => {
+    console.log('前台應用切換到:', appName);
+    
+    // 如果焦點切到其他應用（非我們的桌寵應用）
+    if (appName && appName !== 'Electron' && petWindow) {
+      // 通知渲染進程焦點已切換
+      petWindow.webContents.send('focus-changed', appName);
+      
+      // 如果是桌面相關程序，額外處理
+      if (isDesktopProcess(appName)) {
+        petWindow.webContents.send('desktop-focused');
+      }
+    }
+  }, 300); // 每300ms檢查一次
+}
 
 // 創建右鍵選單
 function createContextMenu() {
@@ -11,6 +33,10 @@ function createContextMenu() {
     {
       label: '開啟對話框',
       click: () => {
+        // 選單項目被點擊時立即通知選單關閉
+        if (petWindow) {
+          petWindow.webContents.send('context-menu-closed');
+        }
         toggleChatWindow();
         // 通知渲染進程執行bounce動畫
         if (petWindow) {
@@ -20,17 +46,12 @@ function createContextMenu() {
     },
     { type: 'separator' },
     {
-      label: '再點一次右鍵繼續移動',
-      click: () => {
-        // 通知渲染進程進入臨時暫停模式
-        if (petWindow) {
-          petWindow.webContents.send('set-temporary-pause');
-        }
-      }
-    },
-    {
       label: isPetPaused ? '開始移動' : '暫停移動',
       click: () => {
+        // 選單項目被點擊時立即通知選單關閉
+        if (petWindow) {
+          petWindow.webContents.send('context-menu-closed');
+        }
         isPetPaused = !isPetPaused;
         // 通知渲染進程切換暫停狀態
         if (petWindow) {
@@ -56,6 +77,7 @@ function createPetWindow() {
     skipTaskbar: true,
     focusable: true,
     acceptFirstMouse: true, // macOS: 允許第一次點擊就啟動
+    movable: false, // 防止被系統移動
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true,
@@ -65,6 +87,31 @@ function createPetWindow() {
   
   petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
   petWindow.loadFile(path.join(__dirname, '../renderer/pet/index.html'));
+  
+  // 監聽視窗位置變化，防止被系統移動到螢幕外
+  petWindow.on('move', () => {
+    const [x, y] = petWindow.getPosition();
+    const displays = screen.getAllDisplays();
+    let isOnScreen = false;
+    
+    // 檢查視窗是否在任何螢幕上
+    for (const display of displays) {
+      const { x: dx, y: dy, width: dw, height: dh } = display.bounds;
+      if (x >= dx - 100 && x <= dx + dw - 28 && y >= dy - 100 && y <= dy + dh - 28) {
+        isOnScreen = true;
+        break;
+      }
+    }
+    
+    // 如果不在螢幕上，移回安全位置
+    if (!isOnScreen) {
+      const primaryDisplay = screen.getPrimaryDisplay();
+      const safeX = Math.max(50, Math.min(x, primaryDisplay.bounds.width - 178));
+      const safeY = Math.max(50, Math.min(y, primaryDisplay.bounds.height - 178));
+      petWindow.setPosition(safeX, safeY, false);
+      console.log(`桌寵被移回安全位置: (${safeX}, ${safeY})`);
+    }
+  });
   
   // 啟動時強制獲得焦點
   petWindow.once('ready-to-show', () => {
@@ -146,6 +193,9 @@ app.whenReady().then(() => {
   createPetWindow();
   createChatWindow();
   createInstachatWindow();
+  
+  // 啟動焦點監聽器
+  startFocusWatcher();
 
   // 註冊全域快捷鍵：Esc 來重新啟動桌寵焦點
   globalShortcut.register('Escape', () => {
@@ -240,7 +290,15 @@ ipcMain.handle('show-instachat-at-pet', () => {
 // 顯示原生右鍵選單
 ipcMain.handle('show-context-menu', (event) => {
   const menu = createContextMenu();
-  menu.popup({ window: petWindow });
+  menu.popup({ 
+    window: petWindow,
+    callback: () => {
+      // 選單關閉時通知渲染進程
+      if (petWindow) {
+        petWindow.webContents.send('context-menu-closed');
+      }
+    }
+  });
 });
 
 // Keep app alive even if windows are hidden (typical for tray apps)
@@ -256,6 +314,12 @@ app.on('activate', () => {
 app.on('will-quit', () => {
   // 清理全域快捷鍵
   globalShortcut.unregisterAll();
+  
+  // 停止焦點監聽
+  if (focusWatcher) {
+    focusWatcher();
+    focusWatcher = null;
+  }
 });
 
 // Helpful: log any unhandled rejections so the app doesn't crash silently

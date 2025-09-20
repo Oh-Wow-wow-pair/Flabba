@@ -18,5 +18,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onResetDragState: (callback) => ipcRenderer.on('reset-drag-state', callback),
   onPetBounce: (callback) => ipcRenderer.on('pet-bounce', callback),
   onSetTemporaryPause: (callback) => ipcRenderer.on('set-temporary-pause', callback),
-  onTogglePermanentPause: (callback) => ipcRenderer.on('toggle-permanent-pause', callback)
+  onTogglePermanentPause: (callback) => ipcRenderer.on('toggle-permanent-pause', callback),
+  onFocusChanged: (callback) => ipcRenderer.on('focus-changed', callback),
+  onDesktopFocused: (callback) => ipcRenderer.on('desktop-focused', callback),
+  onContextMenuClosed: (callback) => ipcRenderer.on('context-menu-closed', callback)
 });

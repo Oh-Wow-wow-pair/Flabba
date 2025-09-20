@@ -83,6 +83,8 @@
     let lastInteractionTime = Date.now();
     let isPaused = false; // 永久暫停狀態（需手動恢復）
     let isTemporaryPaused = false; // 暫時停止狀態（右鍵可恢復）
+    let isDesktopFocused = false; // 追蹤是否為桌面焦點狀態
+    let isContextMenuOpen = false; // 追蹤右鍵選單是否開啟
     
     function loadSprite(spritePath, fallbackPath, finalFallback) {
       return new Promise((resolve) => {
@@ -131,18 +133,30 @@
     }
     
     function move() {
-      if (dragging || isPaused || isTemporaryPaused) return; // 拖拽或任何暫停狀態時不移動
+      if (dragging || isPaused || isTemporaryPaused || isContextMenuOpen) return; // 移除 isDesktopFocused 檢查
       
       x += vx;
       y += vy;
       
       let bounced = false;
-      // 簡單的邊界檢測
-      if (x < 0 || x > 1200) { 
+      // 改進的邊界檢測 - 更嚴格的邊界
+      if (x < 10) { 
+        x = 10;
         vx = -vx; 
         bounced = true; 
       }
-      if (y < 0 || y > 800) { 
+      if (x > 1200) { 
+        x = 1200;
+        vx = -vx; 
+        bounced = true; 
+      }
+      if (y < 10) { 
+        y = 10;
+        vy = -vy; 
+        bounced = true; 
+      }
+      if (y > 800) { 
+        y = 800;
         vy = -vy; 
         bounced = true; 
       }
@@ -340,37 +354,28 @@
       }
     });
     
-    petElement.addEventListener('dblclick', () => {
-      if (window.electronAPI) {
-        window.electronAPI.toggleChat();
-      }
-      setPetState('bounce');
-      setTimeout(() => setPetState('walk'), 500);
-    });
-    
     // 右鍵事件處理 - 使用原生選單
     petElement.addEventListener('contextmenu', (e) => {
       e.preventDefault(); // 防止顯示預設右鍵菜單
       
-      // 檢查當前狀態
-      if (isTemporaryPaused) {
-        // 如果是暫時停止狀態，右鍵點擊直接恢復移動
-        isTemporaryPaused = false;
-        setPetState('walk');
-        console.log('右鍵恢復移動');
-        return;
+      console.log('右鍵點擊，當前選單狀態:', isContextMenuOpen);
+      
+      // 如果選單已經開啟，先關閉它
+      if (isContextMenuOpen) {
+        console.log('選單已開啟，重置狀態');
+        isContextMenuOpen = false;
       }
       
-      // 正常移動狀態 - 立即停止並顯示原生選單
-      isTemporaryPaused = true;
+      // 右鍵時暫停移動
+      isContextMenuOpen = true;
       setPetState('idle');
+      
+      // 直接顯示原生選單
       if (window.electronAPI) {
-        window.electronAPI.moveWindow(x, y);
-        // 顯示原生右鍵選單
         window.electronAPI.showContextMenu();
       }
       
-      console.log('右鍵暫停，桌寵停在位置:', x, y);
+      console.log('顯示右鍵選單，桌寵暫停移動');
     });
     
     // 啟動
@@ -381,6 +386,15 @@
         setPetState('walk');
         setInterval(move, 50); // 移動更新
         setInterval(animateFrames, 100); // 動畫更新
+        
+        // 安全檢查：定期檢查選單狀態，防止卡住
+        setInterval(() => {
+          // 如果選單開啟超過 10 秒，可能有問題，自動重置
+          if (isContextMenuOpen) {
+            console.log('安全檢查：選單狀態可能異常，考慮重置');
+            // 這裡不直接重置，只是記錄，讓用戶知道狀態
+          }
+        }, 10000);
         
         // 初始化滑鼠穿透狀態
         window.electronAPI.setMouseThrough(true);
@@ -404,14 +418,6 @@
           });
         }
         
-        if (window.electronAPI.onSetTemporaryPause) {
-          window.electronAPI.onSetTemporaryPause(() => {
-            isTemporaryPaused = true;
-            setPetState('idle');
-            console.log('已設置臨時暫停模式');
-          });
-        }
-        
         if (window.electronAPI.onTogglePermanentPause) {
           window.electronAPI.onTogglePermanentPause((event, pauseState) => {
             isPaused = pauseState;
@@ -422,6 +428,46 @@
             } else {
               setPetState('walk');
               console.log('桌寵已恢復移動');
+            }
+          });
+        }
+        
+        // 監聽焦點切換事件
+        if (window.electronAPI.onFocusChanged) {
+          window.electronAPI.onFocusChanged((event, appName) => {
+            console.log('應用焦點切換到:', appName);
+            // 焦點切換時的處理可以在這裡添加
+          });
+        }
+        
+        if (window.electronAPI.onDesktopFocused) {
+          window.electronAPI.onDesktopFocused(() => {
+            console.log('桌面獲得焦點 - 桌寵保持原狀態');
+            isDesktopFocused = true;
+            // 不改變移動狀態，只記錄焦點狀態
+          });
+        }
+        
+        // 監聽視窗重新獲得焦點
+        window.addEventListener('focus', () => {
+          console.log('桌寵視窗重新獲得焦點');
+          isDesktopFocused = false;
+          // 安全重置：如果選單狀態異常，重置它
+          if (isContextMenuOpen) {
+            console.log('安全重置：重置選單狀態');
+            isContextMenuOpen = false;
+          }
+          // 不需要特別處理，桌寵會根據原本的狀態繼續運作
+        });
+        
+        // 監聽右鍵選單關閉事件
+        if (window.electronAPI.onContextMenuClosed) {
+          window.electronAPI.onContextMenuClosed(() => {
+            console.log('右鍵選單已關閉');
+            isContextMenuOpen = false;
+            // 如果沒有其他暫停狀態，恢復移動（不考慮桌面焦點）
+            if (!isPaused && !isTemporaryPaused) {
+              setPetState('walk');
             }
           });
         }
