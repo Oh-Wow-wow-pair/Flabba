@@ -2,9 +2,12 @@
 const { app, BrowserWindow, screen, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
 const markdownit = require('markdown-it');
+const { getSingleStaff } = require('../db');
 require('dotenv').config();
 
 let petWindow, chatWindow, instachatWindow;
+let messageCount = 0;
+let conversationID = '';
 
 function createPetWindow() {
   petWindow = new BrowserWindow({
@@ -114,8 +117,36 @@ function toggleChatWindow() {
   }
 }
 
+async function generateQuery(staff, message) {
+  if (!staff) return '';
+
+  let query = '';
+
+  if (messageCount == 0) {
+    messageCount++;
+
+    query += `My name is ${staff.first_name} ${staff.last_name}, I work in the ${staff.dept_name} department as a ${staff.job_title}. My email is ${staff.email} and my phone number is ${staff.phone}. I was hired on ${staff.hire_date} and my current salary is $${staff.salary}. My employment status is ${staff.status}. Here is my question: `;
+  }
+
+  query += `${message}`;
+  return query;
+}
+
 async function messageToAi(message) {
+  let staff = await getSingleStaff('EMP001');
+  let query = await generateQuery(staff, message);
+
+  let body = {
+    inputs: {},
+    response_mode: 'blocking',
+    auto_generate_name: true,
+    user: 'flabba-pet',
+    query: query,
+    conversation_id: conversationID
+  };
+
   console.log('Sending message to AI:', message);
+  console.log(body);
 
   // DIFY API call
   return await fetch('https://api.dify.ai/v1/chat-messages', {
@@ -124,13 +155,7 @@ async function messageToAi(message) {
         Authorization: `Bearer ${process.env.DIFY_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        inputs: {},
-        response_mode: 'blocking',
-        auto_generate_name: true,
-        user: 'asdfasdf',
-        query: message,
-      })
+      body: JSON.stringify(body)
     })
     .catch((error) => {
       console.error('Error during fetch:', error);
@@ -144,6 +169,9 @@ async function messageToAi(message) {
         linkify: true,
         typographer: true,
       });
+
+      conversationID = data.conversation_id;
+
       console.log(md.render(data.answer));
       return md.render(data.answer); // Converts markdown to HTML
     });
