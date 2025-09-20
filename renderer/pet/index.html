@@ -74,6 +74,25 @@
         'sprites/awake/awake_7.PNG',
         'sprites/awake/awake_8.PNG'
       ],
+      // 認真樣子動畫：1-6 順著播（右鍵點擊時使用）
+      serious: [
+        'sprites/serious/serious_1.PNG',
+        'sprites/serious/serious_2.PNG',
+        'sprites/serious/serious_3.PNG',
+        'sprites/serious/serious_4.PNG',
+        'sprites/serious/serious_5.PNG',
+        'sprites/serious/serious_6.PNG'
+      ],
+      // 被拖拽掙扎動畫：1-7 循環
+      grasp: [
+        'sprites/grasp/grasp_1.PNG',
+        'sprites/grasp/grasp_2.PNG',
+        'sprites/grasp/grasp_3.PNG',
+        'sprites/grasp/grasp_4.PNG',
+        'sprites/grasp/grasp_5.PNG',
+        'sprites/grasp/grasp_6.PNG',
+        'sprites/grasp/grasp_7.PNG'
+      ],
       // 彈跳動畫（暫時使用第一幀）
       bounce: ['sprites/walking/walking_1.PNG'],
       // 睡覺動畫（使用 idle_sleeping 的第一幀）
@@ -122,19 +141,30 @@
     let isPaused = false; // 永久暫停狀態（需手動恢復）
     let isTemporaryPaused = false; // 暫時停止狀態（右鍵可恢復）
     let isContextMenuOpen = false; // 追蹤右鍵選單是否開啟
+    let isManuallyPaused = false; // 追蹤是否為手動點擊"暫停移動"按鈕暫停
     
     function loadSprite(...spritePaths) {
       return new Promise((resolve) => {
         function tryLoadSprite(index) {
           if (index >= spritePaths.length) {
+            console.log('所有圖片載入失敗，使用預設圖片');
             resolve(defaultSprite); // 如果所有路徑都失敗，使用預設
             return;
           }
           
+          const currentPath = spritePaths[index];
+          console.log(`嘗試載入圖片 ${index}: ${currentPath}`);
+          
           const img = new Image();
-          img.onload = () => resolve(spritePaths[index]);
-          img.onerror = () => tryLoadSprite(index + 1); // 嘗試下一個
-          img.src = spritePaths[index];
+          img.onload = () => {
+            console.log(`圖片載入成功: ${currentPath}`);
+            resolve(currentPath);
+          };
+          img.onerror = () => {
+            console.log(`圖片載入失敗: ${currentPath}`);
+            tryLoadSprite(index + 1); // 嘗試下一個
+          };
+          img.src = currentPath;
         }
         
         tryLoadSprite(0);
@@ -165,7 +195,19 @@
     
     function animateFrames() {
       const now = Date.now();
-      if (now - lastFrameTime > 400) { // 每400ms切換一幀
+      
+      // 為不同狀態設置不同的動畫速度
+      let frameInterval = 400; // 預設每400ms切換一幀
+      
+      if (currentState === 'awake') {
+        frameInterval = 200; // awake 動畫放慢，每200ms切換一幀
+      } else if (currentState === 'idle_sleeping') {
+        frameInterval = 600; // 睡覺動畫更慢，每600ms切換一幀
+      } else if (currentState === 'walking') {
+        frameInterval = 150; // 走路動畫稍快，每150ms切換一幀
+      }
+      
+      if (now - lastFrameTime > frameInterval) {
         animationFrame++;
         lastFrameTime = now;
         updateSprite();
@@ -275,7 +317,8 @@
         
         console.log('Drag offset:', window.dragOffsetX, window.dragOffsetY);
         
-        setPetState('idle');
+        // 拖拽時使用 grasp 掙扎動畫
+        setPetState('grasp');
         
         // 立即禁用滑鼠穿透
         if (window.electronAPI) {
@@ -416,6 +459,7 @@
       console.log('isContextMenuOpen:', isContextMenuOpen);
       console.log('isMouseOver:', isMouseOver);
       console.log('dragging:', dragging);
+      console.log('當前狀態:', currentState);
       
       e.preventDefault(); // 防止顯示預設右鍵菜單
       e.stopPropagation(); // 阻止事件冒泡
@@ -430,7 +474,23 @@
       
       // 右鍵時暫停移動
       isContextMenuOpen = true;
-      setPetState('idle');
+      
+      // 檢查當前是否為 idle_sleeping 狀態
+      if (currentState === 'idle_sleeping') {
+        console.log('從 idle_sleeping 狀態喚醒，播放 awake 動畫');
+        setPetState('awake');
+        
+        // awake 動畫播放一段時間後切換到 serious (8幀 * 200ms = 1600ms + 緩衝)
+        setTimeout(() => {
+          if (isContextMenuOpen) { // 確保選單仍然開啟
+            console.log('awake 動畫完成，切換到 serious 狀態');
+            setPetState('serious');
+          }
+        }, 1800); // 1.8秒後切換到 serious，讓用戶能清楚看到 awake 動畫
+      } else {
+        // 其他狀態直接使用 serious 動畫
+        setPetState('serious');
+      }
       
       // 直接顯示原生選單
       if (window.electronAPI) {
@@ -495,9 +555,12 @@
             isPaused = pauseState;
             isTemporaryPaused = false;
             if (pauseState) {
-              setPetState('idle');
-              console.log('桌寵已暫停');
+              // 手動暫停時使用 idle_sleeping 動畫
+              isManuallyPaused = true;
+              setPetState('idle_sleeping');
+              console.log('桌寵已暫停，進入 idle_sleeping 狀態');
             } else {
+              isManuallyPaused = false;
               setPetState('walk');
               console.log('桌寵已恢復移動');
             }
@@ -510,9 +573,16 @@
             isTemporaryPaused = shouldPause;
             console.log('桌寵暫停狀態更新:', shouldPause ? '暫停' : '恢復');
             if (shouldPause) {
-              setPetState('idle');
+              // 如果是因為視窗開啟而暫停，使用 serious 動畫
+              // 如果是因為右鍵選單而暫停，保持當前動畫不變
+              if (!isContextMenuOpen && !isManuallyPaused) {
+                setPetState('serious');
+              }
             } else if (!isPaused) { // 只有在非永久暫停時才恢復移動
-              setPetState('walk');
+              // 如果不是手動暫停，才恢復到 walk 狀態
+              if (!isManuallyPaused) {
+                setPetState('walk');
+              }
             }
           });
         }
@@ -586,7 +656,11 @@
               console.log('恢復桌寵移動');
               setPetState('walk');
             } else {
-              console.log('不恢復移動，isPaused:', isPaused, 'isTemporaryPaused:', isTemporaryPaused);
+              console.log('不恢復移動，isPaused:', isPaused, 'isTemporaryPaused:', isTemporaryPaused, 'isManuallyPaused:', isManuallyPaused);
+              // 如果是手動暫停，保持 idle_sleeping 狀態
+              if (isManuallyPaused) {
+                setPetState('idle_sleeping');
+              }
             }
           });
         }
