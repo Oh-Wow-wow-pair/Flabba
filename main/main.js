@@ -1,6 +1,7 @@
 
 const { app, BrowserWindow, screen, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
+const markdownit = require('markdown-it');
 require('dotenv').config();
 
 let petWindow, chatWindow, instachatWindow;
@@ -137,8 +138,14 @@ async function messageToAi(message) {
     .then(response => response.json())
     .then(data => {
       // print the type of data
-      console.log('response data:', data);
-      return data.answer;
+      const md = markdownit({
+        html: true,
+        breaks: true,
+        linkify: true,
+        typographer: true,
+      });
+      console.log(md.render(data.answer));
+      return md.render(data.answer); // Converts markdown to HTML
     });
 }
 

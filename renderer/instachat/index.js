@@ -29,9 +29,13 @@ function appendMessage(message, fromUser = false) {
 
     const bubble = document.createElement('div');
     bubble.className = fromUser ? 'notification bubble input-bubble' : 'notification is-primary bubble reply-bubble';
-    bubble.textContent = message;
-    cell.appendChild(bubble);
 
+    const inner = document.createElement('div');
+    inner.className = 'content';
+    inner.innerHTML = message; // Assuming message is already sanitized HTML
+
+    bubble.appendChild(inner);
+    cell.appendChild(bubble);
     instalist_div.appendChild(cell);
 
     if (!fromUser) {

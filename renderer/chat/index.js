@@ -26,10 +26,14 @@ function appendMessage(message, fromUser = false) {
     cell.className = fromUser ? 'cell is-col-span-3 is-col-start-2' : 'cell is-col-span-3';
 
     const bubble = document.createElement('div');
-    bubble.className = fromUser ? 'notification bubble' : 'notification is-primary bubble';
-    bubble.textContent = message;
-    cell.appendChild(bubble);
+    bubble.className = fromUser ? 'notification bubble content' : 'notification is-primary bubble';
 
+    const inner = document.createElement('div');
+    inner.className = 'content';
+    inner.innerHTML = message; // Assuming message is already sanitized HTML
+
+    bubble.appendChild(inner);
+    cell.appendChild(bubble);
     list_div.appendChild(cell);
 
     if (!fromUser) {
@@ -65,9 +69,6 @@ send_btn.addEventListener('click', async (event) => {
             deleteSkeleton();
             appendMessage('抱歉，無法取得回覆。請稍後再試。', false);
         });
-
-    // deleteSkeleton();
-    // appendMessage(assistantMessage, false);
 
     event.preventDefault();
 });
