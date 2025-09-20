@@ -205,6 +205,8 @@
         frameInterval = 600; // 睡覺動畫更慢，每600ms切換一幀
       } else if (currentState === 'walking') {
         frameInterval = 150; // 走路動畫稍快，每150ms切換一幀
+      } else if (currentState === 'grasp') {
+        frameInterval = 80; // 掙扎動畫很快，每80ms切換一幀，表現緊張感
       }
       
       if (now - lastFrameTime > frameInterval) {
