@@ -70,10 +70,13 @@ class UserDataHandler:
             else:
                 cursor = conn.execute('''
                     SELECT data_type, value, unit, description, updated_at
-                    FROM user_data 
+                    FROM user_data
                     WHERE user_id = ?
-                    GROUP BY data_type
-                    HAVING updated_at = MAX(updated_at)
+                      AND updated_at = (
+                        SELECT MAX(updated_at)
+                        FROM user_data ud2
+                        WHERE ud2.user_id = user_data.user_id AND ud2.data_type = user_data.data_type
+                      )
                     ORDER BY data_type
                 ''', (user_id,))
                 
