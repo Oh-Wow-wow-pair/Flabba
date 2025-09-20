@@ -1,8 +1,46 @@
 
-const { app, BrowserWindow, screen, ipcMain, globalShortcut } = require('electron');
+const { app, BrowserWindow, screen, ipcMain, globalShortcut, Menu } = require('electron');
 const path = require('path');
 
 let petWindow, chatWindow, instachatWindow;
+let isPetPaused = false; // 追蹤桌寵暫停狀態
+
+// 創建右鍵選單
+function createContextMenu() {
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '開啟對話框',
+      click: () => {
+        toggleChatWindow();
+        // 通知渲染進程執行bounce動畫
+        if (petWindow) {
+          petWindow.webContents.send('pet-bounce');
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: '再點一次右鍵繼續移動',
+      click: () => {
+        // 通知渲染進程進入臨時暫停模式
+        if (petWindow) {
+          petWindow.webContents.send('set-temporary-pause');
+        }
+      }
+    },
+    {
+      label: isPetPaused ? '開始移動' : '暫停移動',
+      click: () => {
+        isPetPaused = !isPetPaused;
+        // 通知渲染進程切換暫停狀態
+        if (petWindow) {
+          petWindow.webContents.send('toggle-permanent-pause', isPetPaused);
+        }
+      }
+    }
+  ]);
+  return contextMenu;
+}
 
 function createPetWindow() {
   petWindow = new BrowserWindow({
@@ -197,6 +235,12 @@ ipcMain.handle('show-instachat-at-pet', () => {
     instachatWindow.setPosition(petX + 130, petY, false);
     toggleInstachatWindow();
   }
+});
+
+// 顯示原生右鍵選單
+ipcMain.handle('show-context-menu', (event) => {
+  const menu = createContextMenu();
+  menu.popup({ window: petWindow });
 });
 
 // Keep app alive even if windows are hidden (typical for tray apps)

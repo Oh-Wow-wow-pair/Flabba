@@ -81,6 +81,8 @@
     let vx = 3, vy = 2;
     let dragging = false;
     let lastInteractionTime = Date.now();
+    let isPaused = false; // 永久暫停狀態（需手動恢復）
+    let isTemporaryPaused = false; // 暫時停止狀態（右鍵可恢復）
     
     function loadSprite(spritePath, fallbackPath, finalFallback) {
       return new Promise((resolve) => {
@@ -129,7 +131,7 @@
     }
     
     function move() {
-      if (dragging) return;
+      if (dragging || isPaused || isTemporaryPaused) return; // 拖拽或任何暫停狀態時不移動
       
       x += vx;
       y += vy;
@@ -208,7 +210,8 @@
 
       // check for right click
       if (e.button === 2) {
-        window.electronAPI.showInstachatAtPet();
+        // 右鍵點擊不直接開啟對話框，由 contextmenu 事件處理
+        return;
       }
     });    // 防止圖片拖拽
     petSprite.addEventListener('dragstart', (e) => {
@@ -345,31 +348,29 @@
       setTimeout(() => setPetState('walk'), 500);
     });
     
-    // 右鍵點擊重新獲得焦點（解決拖拽失效問題）
+    // 右鍵事件處理 - 使用原生選單
     petElement.addEventListener('contextmenu', (e) => {
       e.preventDefault(); // 防止顯示預設右鍵菜單
-      console.log('Right click - attempting to refocus window');
-      if (window.electronAPI && window.electronAPI.refocusWindow) {
-        window.electronAPI.refocusWindow().then(success => {
-          if (success) {
-            console.log('Window refocused successfully');
-            // 重新啟用滑鼠互動
-            setTimeout(() => {
-              if (window.electronAPI) {
-                window.electronAPI.setMouseThrough(true);
-              }
-            }, 100);
-          }
-        });
+      
+      // 檢查當前狀態
+      if (isTemporaryPaused) {
+        // 如果是暫時停止狀態，右鍵點擊直接恢復移動
+        isTemporaryPaused = false;
+        setPetState('walk');
+        console.log('右鍵恢復移動');
+        return;
       }
       
-      // 視覺反饋
-      petElement.classList.add('bounce');
-      setPetState('bounce');
-      setTimeout(() => {
-        petElement.classList.remove('bounce');
-        setPetState('walk');
-      }, 300);
+      // 正常移動狀態 - 立即停止並顯示原生選單
+      isTemporaryPaused = true;
+      setPetState('idle');
+      if (window.electronAPI) {
+        window.electronAPI.moveWindow(x, y);
+        // 顯示原生右鍵選單
+        window.electronAPI.showContextMenu();
+      }
+      
+      console.log('右鍵暫停，桌寵停在位置:', x, y);
     });
     
     // 啟動
@@ -391,6 +392,36 @@
             if (dragging) {
               dragging = false;
               setPetState('walk');
+            }
+          });
+        }
+        
+        // 監聽主進程的選單操作訊息
+        if (window.electronAPI.onPetBounce) {
+          window.electronAPI.onPetBounce(() => {
+            setPetState('bounce');
+            setTimeout(() => setPetState('walk'), 500);
+          });
+        }
+        
+        if (window.electronAPI.onSetTemporaryPause) {
+          window.electronAPI.onSetTemporaryPause(() => {
+            isTemporaryPaused = true;
+            setPetState('idle');
+            console.log('已設置臨時暫停模式');
+          });
+        }
+        
+        if (window.electronAPI.onTogglePermanentPause) {
+          window.electronAPI.onTogglePermanentPause((event, pauseState) => {
+            isPaused = pauseState;
+            isTemporaryPaused = false;
+            if (pauseState) {
+              setPetState('idle');
+              console.log('桌寵已暫停');
+            } else {
+              setPetState('walk');
+              console.log('桌寵已恢復移動');
             }
           });
         }

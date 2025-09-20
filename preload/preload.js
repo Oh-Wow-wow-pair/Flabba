@@ -10,7 +10,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   refocusWindow: () => ipcRenderer.invoke('refocus-window'),
   toggleChat: () => ipcRenderer.invoke('toggle-chat'),
   showInstachatAtPet: () => ipcRenderer.invoke('show-instachat-at-pet'),
+  
+  // 新增：顯示原生右鍵選單
+  showContextMenu: () => ipcRenderer.invoke('show-context-menu'),
 
   // 監聽主進程訊息
-  onResetDragState: (callback) => ipcRenderer.on('reset-drag-state', callback)
+  onResetDragState: (callback) => ipcRenderer.on('reset-drag-state', callback),
+  onPetBounce: (callback) => ipcRenderer.on('pet-bounce', callback),
+  onSetTemporaryPause: (callback) => ipcRenderer.on('set-temporary-pause', callback),
+  onTogglePermanentPause: (callback) => ipcRenderer.on('toggle-permanent-pause', callback)
 });
