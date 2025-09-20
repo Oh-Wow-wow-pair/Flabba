@@ -504,6 +504,19 @@
           });
         }
         
+        // 新增：監聽統一的暫停狀態更新
+        if (window.electronAPI.onUpdatePauseState) {
+          window.electronAPI.onUpdatePauseState((event, shouldPause) => {
+            isTemporaryPaused = shouldPause;
+            console.log('桌寵暫停狀態更新:', shouldPause ? '暫停' : '恢復');
+            if (shouldPause) {
+              setPetState('idle');
+            } else if (!isPaused) { // 只有在非永久暫停時才恢復移動
+              setPetState('walk');
+            }
+          });
+        }
+        
         // 監聽焦點切換事件
         if (window.electronAPI.onFocusChanged) {
           window.electronAPI.onFocusChanged((event, appName) => {
