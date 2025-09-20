@@ -7,16 +7,13 @@ from datetime import datetime
 from data_handler import UserDataHandler
 
 app = Flask(__name__)
-CORS(app)  # 允許前端跨域請求
+CORS(app)
 
-# 設定日誌
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 初始化資料處理器
 db_handler = UserDataHandler()
 
-# === LLM 回調接口 ===
 @app.route('/api/llm/callback', methods=['POST'])
 def llm_callback():
     """
@@ -50,13 +47,12 @@ def llm_callback():
         
         logger.info(f"LLM callback - User: {user_id}, Data: {extracted_data}")
         
-        # 儲存資料到資料庫
+        # 資料庫
         updated_count = db_handler.process_backend_data(user_id, extracted_data)
         
-        # 獲取更新後的完整資料
         user_data = db_handler.get_user_data(user_id)
         
-        # 通知前端有新資料更新（如果需要的話）
+        # 通知前端有新資料更新
         # notify_frontend(user_id, user_data)
         
         response = {
@@ -80,7 +76,6 @@ def llm_callback():
             'timestamp': datetime.now().isoformat()
         }), 500
 
-# === 前端查詢接口 ===
 @app.route('/api/frontend/users/<user_id>/data', methods=['GET'])
 def frontend_get_user_data(user_id):
     """
@@ -112,9 +107,7 @@ def frontend_get_user_data(user_id):
                 'timestamp': datetime.now().isoformat()
             }), 404
         
-        # 根據格式化需求處理資料
         if format_type == 'simple':
-            # 簡化格式，只返回值
             simple_data = {}
             for key, info in user_data.items():
                 simple_data[key] = info['value']
@@ -136,7 +129,6 @@ def frontend_get_user_data(user_id):
             'timestamp': datetime.now().isoformat()
         }), 500
 
-# === 前端專用的聚合資料接口 ===
 @app.route('/api/frontend/users/<user_id>/summary', methods=['GET'])
 def frontend_get_user_summary(user_id):
     """
@@ -152,7 +144,6 @@ def frontend_get_user_summary(user_id):
                 'summary': {}
             }), 404
         
-        # 建立前端友善的摘要格式
         summary = {
             'work_status': {
                 'leave_days': user_data.get('leave', {}).get('value', 0),
@@ -182,17 +173,15 @@ def frontend_get_user_summary(user_id):
             'error': str(e)
         }), 500
 
-# === WebSocket 通知 (可選) ===
+
 def notify_frontend(user_id, updated_data):
     """
-    可選：當資料更新時通知前端
+    當資料更新時通知前端
     可以透過 WebSocket 或者前端定期輪詢
     """
-    # 這裡可以實作 WebSocket 或其他即時通知機制
     logger.info(f"Would notify frontend about data update for {user_id}")
     pass
 
-# === 健康檢查 ===
 @app.route('/health', methods=['GET'])
 def health_check():
     """健康檢查端點"""
@@ -207,7 +196,6 @@ def health_check():
         'timestamp': datetime.now().isoformat()
     })
 
-# === 錯誤處理 ===
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({
@@ -222,8 +210,8 @@ def not_found(error):
     }), 404
 
 if __name__ == '__main__':
-    print("🚀 Starting Database API Server...")
-    print("📡 Available endpoints:")
+    print("Starting Database API Server...")
+    print("Available endpoints:")
     print("  POST   /api/llm/callback              # LLM 回調接口")
     print("  GET    /api/frontend/users/<id>/data  # 前端查詢接口") 
     print("  GET    /api/frontend/users/<id>/summary # 前端摘要接口")
@@ -232,6 +220,6 @@ if __name__ == '__main__':
     
     app.run(
         host='0.0.0.0',
-        port=5001,  # 使用不同的 port 避免衝突
+        port=5001,
         debug=True
     )

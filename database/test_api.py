@@ -1,10 +1,8 @@
-# test_new_api.py
 import requests
 import json
 import time
 from datetime import datetime
 
-# API 基礎 URL
 BASE_URL = "http://localhost:5001"
 
 def print_section(title):
