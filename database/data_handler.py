@@ -2,7 +2,6 @@ import sqlite3
 import json
 from datetime import datetime
 from typing import Dict, Any, Optional
-
 class UserDataHandler:
     def __init__(self, db_path: str = "user_data.db"):
         self.db_path = db_path
@@ -22,11 +21,40 @@ class UserDataHandler:
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
-            
             conn.execute('CREATE INDEX IF NOT EXISTS idx_user_data_type ON user_data(user_id, data_type)')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_updated_at ON user_data(updated_at)')
-    
+
+    def _has_any_data(self, user_id: str) -> bool:
+        with sqlite3.connect(self.db_path) as conn:
+            cur = conn.execute('SELECT 1 FROM user_data WHERE user_id = ? LIMIT 1', (user_id,))
+            return cur.fetchone() is not None
+
+    def seed_defaults(self, user_id: str) -> None:
+        now = datetime.now()
+        defaults = [
+            ('leave_days',    15,  'days',  '剩餘特休天數'),
+            ('meal_allowance',     100,  'ntd',   '剩餘餐補'),
+            ('overtime_hours', 30,  'hours', '加班時數'),
+            ('salary',   28000,  'ntd',   '薪水'),
+            ('next_bonus_date',    '2025-09-22', 'date',  '下次獎金發放時間'),
+        ]
+        with sqlite3.connect(self.db_path) as conn:
+            for data_type, value, unit, description in defaults:
+                cur = conn.execute('''
+                    UPDATE user_data
+                       SET value = ?, unit = ?, description = ?, updated_at = ?
+                     WHERE user_id = ? AND data_type = ?
+                ''', (value, unit, description, now, user_id, data_type))
+                if cur.rowcount == 0:
+                    conn.execute('''
+                        INSERT INTO user_data (user_id, data_type, value, unit, description, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (user_id, data_type, value, unit, description, now))
+
     def process_backend_data(self, user_id: str, backend_response: Dict[str, Any]):
+        if not self._has_any_data(user_id):
+            self.seed_defaults(user_id)
+
         data_mapping = {
             'leave_days': ('leave', 'days', '剩餘特休天數'),
             'meal_allowance': ('meal', 'ntd', '剩餘餐補'),
@@ -47,18 +75,23 @@ class UserDataHandler:
         return 0
     
     def batch_update_data(self, updates: list):
+        now = datetime.now()
         with sqlite3.connect(self.db_path) as conn:
             for user_id, data_type, value, unit, description in updates:
-                conn.execute('''
-                    INSERT OR REPLACE INTO user_data 
-                    (user_id, data_type, value, unit, description, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', (user_id, data_type, value, unit, description, datetime.now()))
-    
+                cur = conn.execute('''
+                    UPDATE user_data
+                       SET value = ?, unit = ?, description = ?, updated_at = ?
+                     WHERE user_id = ? AND data_type = ?
+                ''', (value, unit, description, now, user_id, data_type))
+                if cur.rowcount == 0:
+                    conn.execute('''
+                        INSERT INTO user_data (user_id, data_type, value, unit, description, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (user_id, data_type, value, unit, description, now))
+
     def get_user_data(self, user_id: str, data_type: Optional[str] = None) -> Dict[str, Any]:
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            
             if data_type:
                 cursor = conn.execute('''
                     SELECT * FROM user_data 
@@ -79,7 +112,6 @@ class UserDataHandler:
                       )
                     ORDER BY data_type
                 ''', (user_id,))
-                
                 result = {}
                 for row in cursor.fetchall():
                     result[row['data_type']] = {
@@ -89,25 +121,3 @@ class UserDataHandler:
                         'updated_at': row['updated_at']
                     }
                 return result
-
-if __name__ == "__main__":
-    handler = UserDataHandler()
-    
-    backend_data = {
-        'leave_days': 6.0,
-        'meal_allowance': 100,
-        'overtime_hours': 10,
-        'salary': 28000,
-        'next_bonus_date': '2025-09-20'
-    }
-    
-    updated_count = handler.process_backend_data('user001', backend_data)
-    print(f"更新了 {updated_count} 筆資料")
-    
-    user_info = handler.get_user_data('user001')
-    print("使用者資料:")
-    for data_type, info in user_info.items():
-        print(f"  {info['description']}: {info['value']} {info['unit']}")
-    
-    leave_info = handler.get_user_data('user001', 'leave')
-    print(f"\n特休資訊: {leave_info}")
