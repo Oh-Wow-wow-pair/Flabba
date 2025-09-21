@@ -138,7 +138,7 @@
         </div>
         <div class="row">
           <label>類型
-            <select name="type" required>
+            <select name="type" id="leave-type" required>
               <option value="sick">病假</option>
               <option value="annual">特休</option>
               <option value="wfh">在家工作</option>
@@ -155,7 +155,7 @@
           <textarea name="reason" rows="3" placeholder="選填"></textarea>
         </label>
         <div class="actions">
-          <button type="submit" class="btn primary">送出</button>
+          <button type="submit" id="leave-send" class="btn primary">送出</button>
           <button type="reset" class="btn">清除</button>
         </div>
         <p id="form-msg" class="msg" hidden></p>

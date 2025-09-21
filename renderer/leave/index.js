@@ -1,3 +1,5 @@
+const leave_btn = document.getElementById('leave-send');
+
 if (window.electronAPI) {
     window.electronAPI.sendLeaveData((event, data) => {
         document.getElementById("employee-name").value = data.name;
@@ -37,3 +39,40 @@ if (window.electronAPI) {
         endDateDiv.value = date;
     });
 }
+
+leave_btn.addEventListener('click', async (event) => {
+    let leave_type = document.getElementById("leave-type").value;
+
+    if (leave_type == '特休') {
+        leave_type = 'annual_leave';
+    }
+    else {
+        leave_type = 'sick_leave';
+    }
+
+    let leaveData = {
+        "user_id": document.getElementById("employee-id").value,
+        "leave_type": leave_type,
+        "start_date": document.getElementById('start-date').value,
+        "end_date":  document.getElementById('end-date').value,
+        "days": 7,
+        "reason": "個人事務",
+        "approved_by": "manager",
+        "approved_at": "2025-09-21T14:30:00"
+    };
+
+    await fetch('https://0cqh75pm-5001.asse.devtunnels.ms/api/leave/record', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(leaveData)
+    })
+    .then((res) => {
+        console.log(res);
+    });
+});
+
+leave_btn.addEventListener('keypress', (event) => {
+    if (event.key === 'Enter') {
+        leave_btn.click();
+    }
+});

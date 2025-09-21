@@ -389,10 +389,11 @@ async function messageToAi(message) {
         type: "病假",
         startDate: new Date(2025, 10, 1),
         endDate: new Date(2025, 10, 2),
-        reason: "",
+        reason: "頭痛",
       };
       sendLeaveDataToRenderer(leaveData);
 
+      console.log(answer.action.tool_response);
       return md.render(answer.response);
     });
 }
