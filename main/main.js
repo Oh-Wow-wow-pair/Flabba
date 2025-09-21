@@ -6,8 +6,21 @@ require('dotenv').config();
 
 let messageCount = 0;
 let conversationID = '';
-const { watchFrontmostApp, isDesktopProcess } = require('./macFrontmost');
-const { time } = require('console');
+
+const { initNotify, sendNotification, scheduleDailyNoonNotification, scheduleDailyCheckoutNotification } = require('./notify');
+
+// 嘗試引入 macOS 焦點監聽功能（如果存在）
+let watchFrontmostApp = null;
+let isDesktopProcess = null;
+try {
+  if (process.platform === 'darwin') {
+    const macFrontmost = require('./macFrontmost');
+    watchFrontmostApp = macFrontmost.watchFrontmostApp;
+    isDesktopProcess = macFrontmost.isDesktopProcess;
+  }
+} catch (error) {
+  console.log('macFrontmost module not available:', error.message);
+}
 
 let petWindow, chatWindow, instachatWindow, leaveWindow;
 let isPetPaused = false; // 追蹤桌寵暫停狀態
@@ -19,20 +32,25 @@ let focusWatcher = null; // 焦點監聽器
 function startFocusWatcher() {
   if (focusWatcher) return; // 避免重複啟動
   
-  focusWatcher = watchFrontmostApp((appName) => {
-    console.log('前台應用切換到:', appName);
-    
-    // 如果焦點切到其他應用（非我們的桌寵應用）
-    if (appName && appName !== 'Electron' && petWindow) {
-      // 通知渲染進程焦點已切換
-      petWindow.webContents.send('focus-changed', appName);
+  // // 只在macOS上啟動焦點監聽
+  // if (watchFrontmostApp && process.platform === 'darwin') {
+  //   focusWatcher = watchFrontmostApp((appName) => {
+  //     console.log('前台應用切換到:', appName);
       
-      // 如果是桌面相關程序，額外處理
-      if (isDesktopProcess(appName)) {
-        petWindow.webContents.send('desktop-focused');
-      }
-    }
-  }, 300); // 每300ms檢查一次
+  //     // 如果焦點切到其他應用（非我們的桌寵應用）
+  //     if (appName && appName !== 'Electron' && petWindow) {
+  //       // 通知渲染進程焦點已切換
+  //       petWindow.webContents.send('focus-changed', appName);
+        
+  //       // 如果是桌面相關程序，額外處理
+  //       if (isDesktopProcess && isDesktopProcess(appName)) {
+  //         petWindow.webContents.send('desktop-focused');
+  //       }
+  //     }
+  //   });
+  // } else {
+  //   console.log('Focus watching not available on this platform');
+  // }
 }
 
 // 創建右鍵選單
@@ -41,6 +59,9 @@ function createContextMenu() {
     {
       label: '開啟 chatWindow',
       click: () => {
+        // 立即關閉選單狀態
+        isContextMenuOpen = false;
+        
         // 選單項目被點擊時立即通知選單關閉
         if (petWindow) {
           petWindow.webContents.send('context-menu-closed');
@@ -55,6 +76,9 @@ function createContextMenu() {
     {
       label: '開啟 instachatWindow',
       click: () => {
+        // 立即關閉選單狀態
+        isContextMenuOpen = false;
+        
         // 選單項目被點擊時立即通知選單關閉
         if (petWindow) {
           petWindow.webContents.send('context-menu-closed');
@@ -70,12 +94,15 @@ function createContextMenu() {
     {
       label: (isPetPaused || isAnyWindowOpen) ? '繼續移動' : '暫停移動',
       click: () => {
+        // 立即關閉選單狀態，避免影響暫停邏輯
+        isContextMenuOpen = false;
+        
         // 選單項目被點擊時立即通知選單關閉
         if (petWindow) {
           petWindow.webContents.send('context-menu-closed');
         }
         
-        // 如果有視窗開啟，關閉所有視窗
+        // 如果有視窗開啟，關閉所有視窗並同時取消永久暫停
         if (isAnyWindowOpen) {
           if (chatWindow && chatWindow.isVisible()) {
             chatWindow.hide();
@@ -83,15 +110,29 @@ function createContextMenu() {
           if (instachatWindow && instachatWindow.isVisible()) {
             instachatWindow.hide();
           }
-          // 視窗關閉會自動觸發 updatePetPauseState()
+          // 同時重置永久暫停狀態，確保桌寵能立即移動
+          isPetPaused = false;
+          // 強制發送恢復移動的信號
+          if (petWindow) {
+            petWindow.webContents.send('force-resume-movement');
+          }
         } else {
           // 沒有視窗開啟，切換永久暫停狀態
           isPetPaused = !isPetPaused;
           // 通知渲染進程切換暫停狀態
           if (petWindow) {
-            petWindow.webContents.send('toggle-permanent-pause', isPetPaused);
+            if (isPetPaused) {
+              petWindow.webContents.send('toggle-permanent-pause', true);
+            } else {
+              petWindow.webContents.send('force-resume-movement');
+            }
           }
         }
+        
+        // 延遲更新狀態，確保前端有時間處理
+        setTimeout(() => {
+          updatePetPauseState();
+        }, 50);
       }
     }
   ]);
@@ -106,6 +147,14 @@ function updatePetPauseState() {
   }
 }
 
+// 檢查並更新是否有視窗開啟的狀態
+function updateAnyWindowOpenState() {
+  const chatVisible = chatWindow && chatWindow.isVisible();
+  const instachatVisible = instachatWindow && instachatWindow.isVisible();
+  isAnyWindowOpen = chatVisible || instachatVisible;
+  updatePetPauseState();
+}
+
 // 更新 instachatWindow 位置跟隨桌寵
 function updateInstachatPosition() {
   if (instachatWindow && !instachatWindow.isDestroyed() && instachatWindow.isVisible() && petWindow) {
@@ -115,7 +164,7 @@ function updateInstachatPosition() {
 }
 
 function createPetWindow() {
-  petWindow = new BrowserWindow({
+  const windowOptions = {
     width: 128,
     height: 128,
     x: 100,
@@ -123,20 +172,34 @@ function createPetWindow() {
     frame: false,
     transparent: true,
     resizable: false,
-    alwaysOnTop: false,
+    alwaysOnTop: true,      // 改為置頂，確保能接收事件
     hasShadow: false,
     skipTaskbar: true,
     focusable: true,
-    acceptFirstMouse: true, // macOS: 允許第一次點擊就啟動
     movable: true, // 允許程式式移動視窗位置
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true,
       backgroundThrottling: false
     }
-  });
+  };
 
-  petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
+  // macOS 特定設置
+  if (process.platform === 'darwin') {
+    windowOptions.acceptFirstMouse = true; // macOS: 允許第一次點擊就啟動
+  }
+
+  petWindow = new BrowserWindow(windowOptions);
+
+  // 跨平台兼容：只在macOS上設置 setVisibleOnAllWorkspaces
+  if (process.platform === 'darwin') {
+    try {
+      petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
+    } catch (error) {
+      console.warn('setVisibleOnAllWorkspaces not supported on this platform:', error.message);
+    }
+  }
+
   petWindow.loadFile(path.join(__dirname, '../renderer/pet/index.html'));
   
   // 監聽視窗位置變化，防止被系統移動到螢幕外
@@ -195,8 +258,7 @@ function createChatWindow() {
     if (instachatWindow && instachatWindow.isVisible()) {
       instachatWindow.hide();
     }
-    isAnyWindowOpen = true;
-    updatePetPauseState();
+    updateAnyWindowOpenState();
   });
   
   chatWindow.on('focus', () => {
@@ -212,8 +274,7 @@ function createChatWindow() {
   });
   
   chatWindow.on('hide', () => {
-    isAnyWindowOpen = false;
-    updatePetPauseState();
+    updateAnyWindowOpenState();
   });
 }
 
@@ -225,6 +286,7 @@ function createInstachatWindow() {
     transparent: true,
     resizable: false,
     skipTaskbar: true,
+    alwaysOnTop: false,      // 設置為不置頂，避免遮擋桌寵
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true
@@ -238,13 +300,11 @@ function createInstachatWindow() {
     if (chatWindow && chatWindow.isVisible()) {
       chatWindow.hide();
     }
-    isAnyWindowOpen = true;
-    updatePetPauseState();
+    updateAnyWindowOpenState();
   });
   
   instachatWindow.on('hide', () => {
-    isAnyWindowOpen = false;
-    updatePetPauseState();
+    updateAnyWindowOpenState();
   });
 }
 
@@ -415,98 +475,7 @@ function toggleLeaveWindow() {
   }
 }
 
-function sendNotification({ title, body, silent, icon } = {}) {
-  if (!Notification.isSupported()) return false;
-  const n = new Notification({
-    title: title || 'Flabba',
-    body: body || '',
-    silent: !!silent,
-    icon: process.platform === 'darwin' ? undefined : resolveIcon(icon)
-  });
-  n.show();
-  return true;
-}
-
-// 每日 12:00 通知排程
-function scheduleDailyNoonNotification() {
-  const now = new Date();
-  const target = new Date(now);
-  target.setHours(12, 0, 0, 0);              // 今日 12:00
-  if (target <= now) target.setDate(target.getDate() + 1); // 已過就排到明天
-
-  const delay = target - now;
-  setTimeout(() => {
-    sendNotification({ title: '午間提醒', body: '現在是中午 12:00，記得用餐或休息。' });
-    // 之後每天固定時間再提醒
-    setInterval(() => {
-      sendNotification({ title: '午間提醒', body: '現在是中午 12:00，記得用餐或休息。' });
-    }, 24 * 60 * 60 * 1000);
-  }, delay);
-}
-
-function weatherCodeToText(code) {
-  if (code === 0) return '晴朗';
-  if ([1,2,3].includes(code)) return '多雲';
-  if ([45,48].includes(code)) return '霧';
-  if ([51,53,55].includes(code)) return '毛毛雨';
-  if ([61,63,65].includes(code)) return '雨';
-  if ([66,67].includes(code)) return '凍雨';
-  if ([71,73,75,77].includes(code)) return '雪';
-  if ([80,81,82].includes(code)) return '陣雨';
-  if (code === 95) return '雷雨';
-  if ([96,99].includes(code)) return '雷雨冰雹';
-  return '天氣';
-}
-
-async function fetchHsinchuWeather() {
-  try {
-    const url = 'https://api.open-meteo.com/v1/forecast'
-      + '?latitude=24.8138&longitude=120.9675'
-      + '&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,weather_code'
-      + '&timezone=Asia%2FTaipei';
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const cur = data.current;
-    const text = `新竹 ${Math.round(cur.temperature_2m)}°C ${weatherCodeToText(cur.weather_code)} 濕度${cur.relative_humidity_2m}% 風${cur.wind_speed_10m}m/s`;
-    return text; // 回傳給通知組字用
-  } catch (e) {
-    console.warn('weather error', e);
-    return null; // 失敗時回傳 null
-  }
-}
-
-function scheduleDailyCheckoutNotification(){
-  const now = new Date();
-  const target = new Date(now);
-  target.setHours(18, 0, 0, 0);              // 今日 18:00
-  if (target <= now) target.setDate(target.getDate() + 1); // 已過就排到明天
-
-  const delay = target - now;
-  fetchHsinchuWeather();
-  setInterval(fetchHsinchuWeather, 30 * 60 * 1000);
-  setTimeout(() => {
-    (async () => {
-      const w = await fetchHsinchuWeather();
-      const body = w
-        ? `現在是晚上 18:00，該準備下班了！\n${w}`
-        : '現在是晚上 18:00，該準備下班了！';
-      sendNotification({ title: '該下班囉～', body });
-    })();
-
-    // 之後每天固定時間再提醒
-    setInterval(() => {
-      (async () => {
-        const w = await fetchHsinchuWeather();
-        const body = w
-          ? `現在是晚上 18:00，該準備下班了！\n${w}`
-          : '現在是晚上 18:00，該準備下班了！';
-        sendNotification({ title: '該下班囉～', body });
-      })();
-    }, 24 * 60 * 60 * 1000);
-  }, delay);
-};
-
+// 直接進入 whenReady
 app.whenReady().then(() => {
   createPetWindow();
   createChatWindow();
@@ -514,19 +483,7 @@ app.whenReady().then(() => {
 
   createLeaveWindow();
   leaveWindow.hide();
-
-  // 啟動焦點監聽器
   startFocusWatcher();
-
-  // 若啟動瞬間剛好是 12:00，立刻提醒一次
-  const now = new Date();
-  if (now.getHours() === 12 && now.getMinutes() === 0) {
-    sendNotification({ title: '午間提醒', body: '現在是中午 12:00，記得用餐或休息。' });
-  }
-
-  // 排程每天 12:00 提醒
-  scheduleDailyNoonNotification();
-  scheduleDailyCheckoutNotification();
 
   // ESC：讓寵物視窗暫時可互動並重置拖拽狀態
   globalShortcut.register('Escape', () => {
@@ -549,22 +506,11 @@ app.whenReady().then(() => {
   // Alt+P：切換聊天視窗
   globalShortcut.register('Alt+P', () => {
     toggleChatWindow();
-    // 如需一起切換 instachat，可打開下一行：
     // toggleInstachatWindow();
   });
-
-  // globalShortcut.register('Alt+Q', () => {
-  //   sendLeaveDataToRenderer({
-  //     name: "John Doe",
-  //     id: "user001",
-  //     department: "工程部",
-  //     type: "病假",
-  //     startDate: new Date(2025, 9, 21),
-  //     endDate: new Date(2025, 9, 22),
-  //     reason: "",
-  //   });
-  // });
-
+  initNotify(); // 已存在：註冊 renderer 的 notify IPC
+  scheduleDailyNoonNotification(); // 新增：排程每天 12:00 通知
+  scheduleDailyCheckoutNotification(); // 可選：每天 18:00 通知
 });
 
 // IPC handlers
@@ -604,11 +550,24 @@ ipcMain.handle('force-reset-mouse-state', () => {
 
 ipcMain.handle('toggle-mouse-through', (_e, ignore) => {
   if (petWindow) {
-    if (ignore) {
-      petWindow.setIgnoreMouseEvents(true, { forward: true });
-    } else {
-      petWindow.setIgnoreMouseEvents(false);
-      petWindow.focus();
+    try {
+      if (ignore) {
+        petWindow.setIgnoreMouseEvents(true, { forward: true });
+      } else {
+        petWindow.setIgnoreMouseEvents(false);
+        // Windows平台可能需要額外的焦點處理
+        if (process.platform === 'win32') {
+          setTimeout(() => {
+            if (petWindow && !petWindow.isDestroyed()) {
+              petWindow.focus();
+            }
+          }, 10);
+        } else {
+          petWindow.focus();
+        }
+      }
+    } catch (error) {
+      console.error('Mouse event handling error:', error);
     }
   }
 });
@@ -658,18 +617,25 @@ ipcMain.handle('show-context-menu', (event) => {
   updatePetPauseState(); // 選單開啟時暫停桌寵
   
   const menu = createContextMenu();
-  menu.popup({ 
-    window: petWindow,
-    callback: () => {
-      // 選單關閉時通知渲染進程並恢復桌寵狀態
-      isContextMenuOpen = false;
-      updatePetPauseState();
-      
-      if (petWindow) {
-        petWindow.webContents.send('context-menu-closed');
+  
+  try {
+    menu.popup({ 
+      window: petWindow,
+      callback: () => {
+        // 選單關閉時通知渲染進程並恢復桌寵狀態
+        isContextMenuOpen = false;
+        updatePetPauseState();
+        if (petWindow) {
+          petWindow.webContents.send('context-menu-closed');
+        }
       }
-    }
-  });
+    });
+  } catch (error) {
+    console.error('Context menu error:', error);
+    // 如果選單顯示失敗，重置狀態
+    isContextMenuOpen = false;
+    updatePetPauseState();
+  }
 });
 
 ipcMain.handle('notify', (_event, payload) => {
@@ -681,30 +647,12 @@ ipcMain.handle('notify', (_event, payload) => {
   }
 });
 
-ipcMain.handle('message-to-ai', async (_e, message) => {
-  return await messageToAi(message);
-});
-
-// Keep app alive even if windows are hidden (typical for tray apps)
-// Do not quit on macOS when all windows closed
-app.on('window-all-closed', () => {
-  // no-op to keep the pet running
-});
-
-app.on('activate', () => {
-  if (!petWindow) createPetWindow();
-});
-
-app.on('will-quit', () => {
-  globalShortcut.unregisterAll();
-  
-  // 停止焦點監聽
-  if (focusWatcher) {
-    focusWatcher();
-    focusWatcher = null;
+// 新增：AI 聊天處理
+ipcMain.handle('message-to-ai', async (_event, message) => {
+  try {
+    return await messageToAi(message);
+  } catch (error) {
+    console.error('AI 聊天錯誤:', error);
+    return '抱歉，發生了錯誤。請稍後再試。';
   }
-});
-
-process.on('unhandledRejection', (err) => {
-  console.error('Unhandled rejection:', err);
 });
