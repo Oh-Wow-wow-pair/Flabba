@@ -2,20 +2,16 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import json
 import logging
-import requests
-import uuid
 from datetime import datetime
 from data_handler import UserDataHandler
 
 app = Flask(__name__)
-CORS(app)
+CORS(app)  # 允許前端跨域請求
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 db_handler = UserDataHandler()
-
-pending_leave_requests = {}
 
 @app.route('/api/llm/callback', methods=['POST'])
 def llm_callback():
@@ -25,16 +21,6 @@ def llm_callback():
     """
     try:
         data = request.get_json()
-        
-        # 預期的資料格式：
-        # {
-        #     "user_id": "user001",
-        #     "extracted_data": {
-        #         "leave_days": 12.5,
-        #         "meal_allowance": 1500,
-        #         ...
-        #     }
-        # }
         
         if not data or 'user_id' not in data or 'extracted_data' not in data:
             return jsonify({
@@ -73,214 +59,86 @@ def llm_callback():
             'timestamp': datetime.now().isoformat()
         }), 500
 
-@app.route('/api/leave/request', methods=['POST'])
-def leave_request():
+# === 請假記錄接口 ===
+@app.route('/api/leave/record', methods=['POST'])
+def record_leave():
     """
-    LLM 發送請假申請到前端的接口
-    流程: LLM → 這個API → 前端確認 → 前端回傳OK → 資料庫更新
+    前端確認請假後，記錄請假資訊
+    前端會把已經確認的請假資料發送過來，只需要記錄即可
     """
     try:
         data = request.get_json()
         
-        # 預期格式:
-        # {
-        #     "user_id": "user001", 
-        #     "leave_type": "annual_leave",  # 假別
-        #     "start_date": "2025-09-25",
-        #     "end_date": "2025-09-26", 
-        #     "days": 2,
-        #     "reason": "personal matters"
-        # }
-        
+        # 檢查必要欄位
         required_fields = ['user_id', 'leave_type', 'start_date', 'end_date', 'days']
-        if not all(field in data for field in required_fields):
+        missing_fields = [field for field in required_fields if field not in data]
+        
+        if missing_fields:
             return jsonify({
                 'success': False,
-                'error': f'Missing required fields: {required_fields}'
+                'error': f'Missing required fields: {missing_fields}'
             }), 400
         
-        request_id = str(uuid.uuid4())[:8]
+        user_id = data['user_id']
+        days_used = data['days']
         
-        leave_request_data = {
-            'request_id': request_id,
-            'user_id': data['user_id'],
+        # 驗證天數不能為負數
+        if days_used < 0:
+            return jsonify({
+                'success': False,
+                'error': 'Days cannot be negative'
+            }), 400
+        
+        logger.info(f"Recording leave for user {user_id}: {days_used} days, {data['start_date']} to {data['end_date']}")
+        
+        # 獲取現有特休天數
+        current_data = db_handler.get_user_data(user_id, 'leave')
+        current_leave_days = current_data.get('value', 0) if current_data else 0
+        
+        # 扣除請假天數
+        new_leave_days = max(0, current_leave_days - days_used)
+        
+        # 更新資料庫中的特休天數
+        updated_count = db_handler.process_backend_data(user_id, {
+            'leave_days': new_leave_days
+        })
+        
+        # 準備請假記錄
+        leave_record = {
+            'user_id': user_id,
             'leave_type': data['leave_type'],
             'start_date': data['start_date'],
-            'end_date': data['end_date'],
-            'days': data['days'],
+            'end_date': data['end_date'], 
+            'days': days_used,
             'reason': data.get('reason', ''),
-            'status': 'pending_frontend',
-            'created_at': datetime.now().isoformat()
+            'approved_by': data.get('approved_by', 'system'),
+            'approved_at': data.get('approved_at', datetime.now().isoformat()),
+            'recorded_at': datetime.now().isoformat(),
+            'previous_leave_days': current_leave_days,
+            'remaining_leave_days': new_leave_days
         }
         
-        pending_leave_requests[request_id] = leave_request_data
-        
-        logger.info(f"Leave request created: {request_id} for user {data['user_id']}")
-        
-        # 通知前端
-        frontend_notified = notify_frontend_leave_request(leave_request_data)
+        # 記錄到日誌 (未來可以考慮建立 leave_history 表)
+        logger.info(f"Leave recorded: {json.dumps(leave_record, ensure_ascii=False)}")
         
         return jsonify({
             'success': True,
-            'message': 'Leave request created and sent to frontend',
-            'request_id': request_id,
-            'frontend_notified': frontend_notified,
-            'status': 'pending_frontend',
+            'message': 'Leave record saved successfully',
+            'user_id': user_id,
+            'leave_record': leave_record,
+            'database_updated': updated_count > 0,
             'timestamp': datetime.now().isoformat()
         })
         
     except Exception as e:
-        logger.error(f"Leave request error: {e}")
+        logger.error(f"Record leave error: {e}")
         return jsonify({
             'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/api/leave/confirm', methods=['POST'])
-def leave_confirm():
-    """
-    前端確認請假申請的接口
-    前端確認後，更新資料庫並回傳給LLM
-    """
-    try:
-        data = request.get_json()
-        
-        # 預期格式:
-        # {
-        #     "request_id": "abc123",
-        #     "approved": true,  # 前端確認結果
-        #     "message": "請假申請已處理"
-        # }
-        
-        if 'request_id' not in data:
-            return jsonify({
-                'success': False,
-                'error': 'request_id is required'
-            }), 400
-        
-        request_id = data['request_id']
-        approved = data.get('approved', False)
-        
-        # 檢查請假申請是否存在
-        if request_id not in pending_leave_requests:
-            return jsonify({
-                'success': False,
-                'error': 'Leave request not found'
-            }), 404
-        
-        leave_request = pending_leave_requests[request_id]
-        
-        if approved:
-            # 前端確認 OK，更新使用者的特休天數
-            user_id = leave_request['user_id']
-            days_used = leave_request['days']
-            
-            # 獲取現有特休天數
-            current_data = db_handler.get_user_data(user_id, 'leave')
-            current_leave_days = current_data.get('value', 0) if current_data else 0
-            
-            # 扣除請假天數
-            new_leave_days = max(0, current_leave_days - days_used)
-            
-            # 更新資料庫
-            updated_count = db_handler.process_backend_data(user_id, {
-                'leave_days': new_leave_days
-            })
-            
-            # 更新請假申請狀態
-            leave_request['status'] = 'approved'
-            leave_request['processed_at'] = datetime.now().isoformat()
-            
-            logger.info(f"Leave approved: {request_id}, {days_used} days deducted from {user_id}")
-            
-            response = {
-                'success': True,
-                'message': 'Leave request approved and processed',
-                'request_id': request_id,
-                'user_id': user_id,
-                'days_deducted': days_used,
-                'remaining_leave_days': new_leave_days,
-                'database_updated': updated_count > 0,
-                'timestamp': datetime.now().isoformat()
-            }
-        else:
-            # 前端拒絕
-            leave_request['status'] = 'rejected'
-            leave_request['processed_at'] = datetime.now().isoformat()
-            
-            logger.info(f"Leave rejected: {request_id}")
-            
-            response = {
-                'success': True,
-                'message': 'Leave request rejected',
-                'request_id': request_id,
-                'status': 'rejected',
-                'timestamp': datetime.now().isoformat()
-            }
-        
-        del pending_leave_requests[request_id]
-        
-        return jsonify(response)
-        
-    except Exception as e:
-        logger.error(f"Leave confirm error: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-def notify_frontend_leave_request(leave_request_data):
-    """
-    通知前端有新的請假申請
-    實際實作可以用 WebSocket、Server-Sent Events 或輪詢
-    """
-    logger.info(f"Would notify frontend about leave request: {leave_request_data['request_id']}")
-    
-    # 如果有前端 webhook URL，可以發送 HTTP 請求
-    # try:
-    #     frontend_webhook_url = "http://localhost:3000/api/leave/notification"
-    #     requests.post(frontend_webhook_url, json=leave_request_data, timeout=5)
-    #     return True
-    # except:
-    #     return False
-    
-    return True
-
-@app.route('/api/frontend/leave/pending', methods=['GET'])
-def get_pending_leave_requests():
-    """
-    前端查詢待處理的請假申請
-    """
-    try:
-        user_id = request.args.get('user_id')  # 可選
-        
-        if user_id:
-            user_requests = {
-                req_id: req_data 
-                for req_id, req_data in pending_leave_requests.items()
-                if req_data['user_id'] == user_id and req_data['status'] == 'pending_frontend'
-            }
-        else:
-            user_requests = {
-                req_id: req_data
-                for req_id, req_data in pending_leave_requests.items()
-                if req_data['status'] == 'pending_frontend'
-            }
-        
-        return jsonify({
-            'success': True,
-            'pending_requests': user_requests,
-            'count': len(user_requests),
+            'error': str(e),
             'timestamp': datetime.now().isoformat()
-        })
-        
-    except Exception as e:
-        logger.error(f"Get pending leave requests error: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
         }), 500
-    
+
+# === 前端查詢接口 ===
 @app.route('/api/frontend/users/<user_id>/data', methods=['GET'])
 def frontend_get_user_data(user_id):
     """
@@ -381,14 +239,7 @@ def frontend_get_user_summary(user_id):
             'error': str(e)
         }), 500
 
-def notify_frontend(user_id, updated_data):
-    """
-    可選：當資料更新時通知前端
-    可以透過 WebSocket 或者前端定期輪詢
-    """
-    logger.info(f"Would notify frontend about data update for {user_id}")
-    pass
-
+# === 健康檢查 ===
 @app.route('/health', methods=['GET'])
 def health_check():
     """健康檢查端點"""
@@ -397,6 +248,7 @@ def health_check():
         'service': 'Database API',
         'endpoints': {
             'llm_callback': '/api/llm/callback',
+            'leave_record': '/api/leave/record',
             'frontend_data': '/api/frontend/users/<user_id>/data',
             'frontend_summary': '/api/frontend/users/<user_id>/summary'
         },
@@ -410,19 +262,26 @@ def not_found(error):
         'error': 'Endpoint not found',
         'available_endpoints': [
             'POST /api/llm/callback',
+            'POST /api/leave/record',
             'GET /api/frontend/users/<user_id>/data',
             'GET /api/frontend/users/<user_id>/summary',
             'GET /health'
         ]
     }), 404
 
+@app.errorhandler(405)
+def method_not_allowed(error):
+    return jsonify({
+        'success': False,
+        'error': 'Method not allowed',
+        'timestamp': datetime.now().isoformat()
+    }), 405
+
 if __name__ == '__main__':
     print("🚀 Starting Database API Server...")
     print("📡 Available endpoints:")
     print("  POST   /api/llm/callback              # LLM 資料回調")
-    print("  POST   /api/leave/request             # LLM 請假申請") 
-    print("  POST   /api/leave/confirm             # 前端確認請假")
-    print("  GET    /api/frontend/leave/pending    # 前端查詢待處理請假")
+    print("  POST   /api/leave/record              # 前端記錄請假") 
     print("  GET    /api/frontend/users/<id>/data  # 前端查詢使用者資料") 
     print("  GET    /api/frontend/users/<id>/summary # 前端摘要")
     print("  GET    /health                       # 健康檢查")
