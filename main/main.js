@@ -22,7 +22,7 @@ try {
   console.log('macFrontmost module not available:', error.message);
 }
 
-let petWindow, chatWindow, instachatWindow, infoWindow;
+let petWindow, chatWindow, instachatWindow, leaveWindow;
 let isPetPaused = false; // 追蹤桌寵暫停狀態
 let isContextMenuOpen = false; // 追蹤右鍵選單狀態
 let isAnyWindowOpen = false; // 追蹤是否有視窗開啟
@@ -333,13 +333,13 @@ function toggleInstachatWindow() {
   }
 }
 
-function createInfoWindow() {
-  if (infoWindow && !infoWindow.isDestroyed()) {
-    infoWindow.show();
-    infoWindow.focus();
+function createLeaveWindow() {
+  if (leaveWindow && !leaveWindow.isDestroyed()) {
+    leaveWindow.show();
+    leaveWindow.focus();
     return;
   }
-  infoWindow = new BrowserWindow({
+  leaveWindow = new BrowserWindow({
     width: 460,
     height: 800,
     show: false,
@@ -350,12 +350,12 @@ function createInfoWindow() {
       contextIsolation: true
     }
   });
-  infoWindow.loadFile(path.join(__dirname, '../renderer/info/index.html'));
-  infoWindow.once('ready-to-show', () => {
-    infoWindow.show();
-    infoWindow.focus();
+  leaveWindow.loadFile(path.join(__dirname, '../renderer/leave/index.html'));
+  leaveWindow.once('ready-to-show', () => {
+    leaveWindow.show();
+    leaveWindow.focus();
   });
-  infoWindow.on('closed', () => { infoWindow = null; });
+  leaveWindow.on('closed', () => { leaveWindow = null; });
 }
 
 function toggleChatWindow() {
@@ -394,7 +394,7 @@ async function generateQuery(staff, message) {
   if (messageCount == 0) {
     messageCount++;
 
-    query += `My name is ${staff.first_name} ${staff.last_name}, I work in the ${staff.dept_name} department as a ${staff.job_title}. My email is ${staff.email} and my phone number is ${staff.phone}. I was hired on ${staff.hire_date} and my current salary is $${staff.salary}. My employment status is ${staff.status}. Here is my question: `;
+    query += `My name is ${staff.first_name} ${staff.last_name}, my emplyee ID is ${staff.staff_id}. I work in the ${staff.dept_name} department as a ${staff.job_title}. My email is ${staff.email} and my phone number is ${staff.phone}. I was hired on ${staff.hire_date} and my current salary is $${staff.salary}. My employment status is ${staff.status}. Here is my question: `;
   }
 
   query += `${message}`;
@@ -402,7 +402,7 @@ async function generateQuery(staff, message) {
 }
 
 async function messageToAi(message) {
-  let staff = await getSingleStaff('EMP001');
+  let staff = await getSingleStaff('user001');
   let query = await generateQuery(staff, message);
 
   let body = {
@@ -431,7 +431,10 @@ async function messageToAi(message) {
     }) 
     .then(response => response.json())
     .then(data => {
-      // print the type of data
+      conversationID = data.conversation_id;
+      return JSON.parse(data.answer);
+    })
+    .then(answer => {
       const md = markdownit({
         html: true,
         breaks: true,
@@ -439,19 +442,36 @@ async function messageToAi(message) {
         typographer: true,
       });
 
-      conversationID = data.conversation_id;
+      let leaveData = {
+        name: "John Doe",
+        id: "user001",
+        department: "工程部",
+        type: "病假",
+        startDate: new Date(2025, 10, 1),
+        endDate: new Date(2025, 10, 2),
+        reason: "頭痛",
+      };
+      sendLeaveDataToRenderer(leaveData);
 
-      console.log(md.render(data.answer));
-      return md.render(data.answer); // Converts markdown to HTML
+      console.log(answer.action.tool_response);
+      return md.render(answer.response);
     });
 }
 
-function toggleInfoWindow() {
-  if (infoWindow && !infoWindow.isDestroyed()) {
-    if (infoWindow.isVisible()) infoWindow.hide();
-    else { infoWindow.show(); infoWindow.focus(); }
+function sendLeaveDataToRenderer(leaveData) {
+  if (leaveWindow && !leaveWindow.isDestroyed() && !leaveWindow.isVisible()) {
+    leaveWindow.show();
+  }
+
+  leaveWindow.webContents.send('send-leave-data', leaveData);
+}
+
+function toggleLeaveWindow() {
+  if (leaveWindow && !leaveWindow.isDestroyed()) {
+    if (leaveWindow.isVisible()) leaveWindow.hide();
+    else { leaveWindow.show(); leaveWindow.focus(); }
   } else {
-    createInfoWindow();
+    createLeaveWindow();
   }
 }
 
@@ -461,6 +481,8 @@ app.whenReady().then(() => {
   createChatWindow();
   createInstachatWindow();
 
+  createLeaveWindow();
+  leaveWindow.hide();
   startFocusWatcher();
 
   // ESC：讓寵物視窗暫時可互動並重置拖拽狀態
@@ -476,9 +498,9 @@ app.whenReady().then(() => {
     }
   });
 
-  // Cmd/Ctrl+Shift+L：切換請假介面（info）
+  // Cmd/Ctrl+Shift+L：切換請假介面（leave）
   globalShortcut.register('CommandOrControl+Shift+L', () => {
-    toggleInfoWindow();
+    toggleLeaveWindow();
   });
 
   // Alt+P：切換聊天視窗
