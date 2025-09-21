@@ -91,17 +91,14 @@ def record_leave():
         
         logger.info(f"Recording leave for user {user_id}: {days_used} days, {data['start_date']} to {data['end_date']}")
         
+        current_data = db_handler.get_user_data(user_id, 'leave')
+        current_leave_days = current_data.get('value', 0) if current_data else 0
+        
         # 根據請假類型決定是否扣除特休
         leave_type = data['leave_type']
         updated_count = 0
-        current_leave_days = 0
-        new_leave_days = 0
         
         if leave_type == 'annual_leave':  # 只有特休假才扣除特休天數
-            # 獲取現有特休天數
-            current_data = db_handler.get_user_data(user_id, 'leave')
-            current_leave_days = current_data.get('value', 0) if current_data else 0
-            
             # 扣除請假天數
             new_leave_days = max(0, current_leave_days - days_used)
             
@@ -113,12 +110,8 @@ def record_leave():
             logger.info(f"Annual leave deducted: {days_used} days from {user_id}, remaining: {new_leave_days}")
         else:
             # 其他假別不扣除特休，只記錄
-            logger.info(f"Non-annual leave recorded: {leave_type} for {user_id}, {days_used} days")
-            
-            # 獲取現有特休天數以供記錄
-            current_data = db_handler.get_user_data(user_id, 'leave')
-            current_leave_days = current_data.get('value', 0) if current_data else 0
             new_leave_days = current_leave_days  # 不變動
+            logger.info(f"Non-annual leave recorded: {leave_type} for {user_id}, {days_used} days")
         
         # 準備請假記錄
         leave_record = {
