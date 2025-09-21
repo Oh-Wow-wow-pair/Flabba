@@ -535,3 +535,22 @@ ipcMain.handle('show-context-menu', (event) => {
     }
   });
 });
+
+ipcMain.handle('notify', (_event, payload) => {
+  try {
+    return sendNotification(payload);
+  } catch (err) {
+    console.error('發送通知失敗:', err);
+    return false;
+  }
+});
+
+// 新增：AI 聊天處理
+ipcMain.handle('message-to-ai', async (_event, message) => {
+  try {
+    return await messageToAi(message);
+  } catch (error) {
+    console.error('AI 聊天錯誤:', error);
+    return '抱歉，發生了錯誤。請稍後再試。';
+  }
+});
