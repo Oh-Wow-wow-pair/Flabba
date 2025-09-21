@@ -9,6 +9,19 @@ let conversationID = '';
 
 const { initNotify, sendNotification, scheduleDailyNoonNotification, scheduleDailyCheckoutNotification } = require('./notify');
 
+// 嘗試引入 macOS 焦點監聽功能（如果存在）
+let watchFrontmostApp = null;
+let isDesktopProcess = null;
+try {
+  if (process.platform === 'darwin') {
+    const macFrontmost = require('./macFrontmost');
+    watchFrontmostApp = macFrontmost.watchFrontmostApp;
+    isDesktopProcess = macFrontmost.isDesktopProcess;
+  }
+} catch (error) {
+  console.log('macFrontmost module not available:', error.message);
+}
+
 let petWindow, chatWindow, instachatWindow, infoWindow;
 let isPetPaused = false; // 追蹤桌寵暫停狀態
 let isContextMenuOpen = false; // 追蹤右鍵選單狀態
@@ -46,6 +59,9 @@ function createContextMenu() {
     {
       label: '開啟 chatWindow',
       click: () => {
+        // 立即關閉選單狀態
+        isContextMenuOpen = false;
+        
         // 選單項目被點擊時立即通知選單關閉
         if (petWindow) {
           petWindow.webContents.send('context-menu-closed');
@@ -60,6 +76,9 @@ function createContextMenu() {
     {
       label: '開啟 instachatWindow',
       click: () => {
+        // 立即關閉選單狀態
+        isContextMenuOpen = false;
+        
         // 選單項目被點擊時立即通知選單關閉
         if (petWindow) {
           petWindow.webContents.send('context-menu-closed');
@@ -75,12 +94,15 @@ function createContextMenu() {
     {
       label: (isPetPaused || isAnyWindowOpen) ? '繼續移動' : '暫停移動',
       click: () => {
+        // 立即關閉選單狀態，避免影響暫停邏輯
+        isContextMenuOpen = false;
+        
         // 選單項目被點擊時立即通知選單關閉
         if (petWindow) {
           petWindow.webContents.send('context-menu-closed');
         }
         
-        // 如果有視窗開啟，關閉所有視窗
+        // 如果有視窗開啟，關閉所有視窗並同時取消永久暫停
         if (isAnyWindowOpen) {
           if (chatWindow && chatWindow.isVisible()) {
             chatWindow.hide();
@@ -88,15 +110,29 @@ function createContextMenu() {
           if (instachatWindow && instachatWindow.isVisible()) {
             instachatWindow.hide();
           }
-          // 視窗關閉會自動觸發 updatePetPauseState()
+          // 同時重置永久暫停狀態，確保桌寵能立即移動
+          isPetPaused = false;
+          // 強制發送恢復移動的信號
+          if (petWindow) {
+            petWindow.webContents.send('force-resume-movement');
+          }
         } else {
           // 沒有視窗開啟，切換永久暫停狀態
           isPetPaused = !isPetPaused;
           // 通知渲染進程切換暫停狀態
           if (petWindow) {
-            petWindow.webContents.send('toggle-permanent-pause', isPetPaused);
+            if (isPetPaused) {
+              petWindow.webContents.send('toggle-permanent-pause', true);
+            } else {
+              petWindow.webContents.send('force-resume-movement');
+            }
           }
         }
+        
+        // 延遲更新狀態，確保前端有時間處理
+        setTimeout(() => {
+          updatePetPauseState();
+        }, 50);
       }
     }
   ]);
@@ -109,6 +145,14 @@ function updatePetPauseState() {
   if (petWindow) {
     petWindow.webContents.send('update-pause-state', shouldPause);
   }
+}
+
+// 檢查並更新是否有視窗開啟的狀態
+function updateAnyWindowOpenState() {
+  const chatVisible = chatWindow && chatWindow.isVisible();
+  const instachatVisible = instachatWindow && instachatWindow.isVisible();
+  isAnyWindowOpen = chatVisible || instachatVisible;
+  updatePetPauseState();
 }
 
 // 更新 instachatWindow 位置跟隨桌寵
@@ -128,7 +172,7 @@ function createPetWindow() {
     frame: false,
     transparent: true,
     resizable: false,
-    alwaysOnTop: false,
+    alwaysOnTop: true,      // 改為置頂，確保能接收事件
     hasShadow: false,
     skipTaskbar: true,
     focusable: true,
@@ -214,8 +258,7 @@ function createChatWindow() {
     if (instachatWindow && instachatWindow.isVisible()) {
       instachatWindow.hide();
     }
-    isAnyWindowOpen = true;
-    updatePetPauseState();
+    updateAnyWindowOpenState();
   });
   
   chatWindow.on('focus', () => {
@@ -231,8 +274,7 @@ function createChatWindow() {
   });
   
   chatWindow.on('hide', () => {
-    isAnyWindowOpen = false;
-    updatePetPauseState();
+    updateAnyWindowOpenState();
   });
 }
 
@@ -244,6 +286,7 @@ function createInstachatWindow() {
     transparent: true,
     resizable: false,
     skipTaskbar: true,
+    alwaysOnTop: false,      // 設置為不置頂，避免遮擋桌寵
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true
@@ -257,13 +300,11 @@ function createInstachatWindow() {
     if (chatWindow && chatWindow.isVisible()) {
       chatWindow.hide();
     }
-    isAnyWindowOpen = true;
-    updatePetPauseState();
+    updateAnyWindowOpenState();
   });
   
   instachatWindow.on('hide', () => {
-    isAnyWindowOpen = false;
-    updatePetPauseState();
+    updateAnyWindowOpenState();
   });
 }
 
