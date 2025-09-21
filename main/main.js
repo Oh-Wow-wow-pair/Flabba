@@ -19,25 +19,25 @@ let focusWatcher = null; // 焦點監聽器
 function startFocusWatcher() {
   if (focusWatcher) return; // 避免重複啟動
   
-  // 只在macOS上啟動焦點監聽
-  if (watchFrontmostApp && process.platform === 'darwin') {
-    focusWatcher = watchFrontmostApp((appName) => {
-      console.log('前台應用切換到:', appName);
+  // // 只在macOS上啟動焦點監聽
+  // if (watchFrontmostApp && process.platform === 'darwin') {
+  //   focusWatcher = watchFrontmostApp((appName) => {
+  //     console.log('前台應用切換到:', appName);
       
-      // 如果焦點切到其他應用（非我們的桌寵應用）
-      if (appName && appName !== 'Electron' && petWindow) {
-        // 通知渲染進程焦點已切換
-        petWindow.webContents.send('focus-changed', appName);
+  //     // 如果焦點切到其他應用（非我們的桌寵應用）
+  //     if (appName && appName !== 'Electron' && petWindow) {
+  //       // 通知渲染進程焦點已切換
+  //       petWindow.webContents.send('focus-changed', appName);
         
-        // 如果是桌面相關程序，額外處理
-        if (isDesktopProcess && isDesktopProcess(appName)) {
-          petWindow.webContents.send('desktop-focused');
-        }
-      }
-    });
-  } else {
-    console.log('Focus watching not available on this platform');
-  }
+  //       // 如果是桌面相關程序，額外處理
+  //       if (isDesktopProcess && isDesktopProcess(appName)) {
+  //         petWindow.webContents.send('desktop-focused');
+  //       }
+  //     }
+  //   });
+  // } else {
+  //   console.log('Focus watching not available on this platform');
+  // }
 }
 
 // 創建右鍵選單
