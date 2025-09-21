@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onSetTemporaryPause: (callback) => ipcRenderer.on('set-temporary-pause', callback),
   onTogglePermanentPause: (callback) => ipcRenderer.on('toggle-permanent-pause', callback),
   onUpdatePauseState: (callback) => ipcRenderer.on('update-pause-state', callback), // 新增
+  onForceResumeMovement: (callback) => ipcRenderer.on('force-resume-movement', callback), // 強制恢復移動
   onFocusChanged: (callback) => ipcRenderer.on('focus-changed', callback),
   onDesktopFocused: (callback) => ipcRenderer.on('desktop-focused', callback),
   onContextMenuClosed: (callback) => ipcRenderer.on('context-menu-closed', callback),
