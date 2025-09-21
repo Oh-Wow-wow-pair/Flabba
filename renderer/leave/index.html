@@ -127,35 +127,35 @@
       <form id="leave-form" class="form">
         <div class="row">
           <label>姓名
-            <input type="text" name="name" placeholder="請輸入姓名" readonly />
+            <input type="text" id="employee-name" name="name" placeholder="請輸入姓名" readonly />
           </label>
           <label>員工編號
-            <input type="text" name="employeeId" placeholder="請輸入員工編號" readonly />
+            <input type="text" id="employee-id" name="employeeId" placeholder="請輸入員工編號" readonly />
           </label>
           <label>部門
-            <input type="text" name="department" placeholder="請輸入部門" readonly />
+            <input type="text" id="department" name="department" placeholder="請輸入部門" readonly />
           </label>
         </div>
         <div class="row">
           <label>類型
-            <select name="type" required>
-              <option value="annual">特休</option>
+            <select name="type" id="leave-type" required>
               <option value="sick">病假</option>
+              <option value="annual">特休</option>
               <option value="wfh">在家工作</option>
             </select>
           </label>
           <label>開始日期
-            <input type="date" name="startDate" required />
+            <input type="date" id="start-date" name="startDate" required />
           </label>
           <label>結束日期
-            <input type="date" name="endDate" required />
+            <input type="date" id="end-date" name="endDate" required />
           </label>
         </div>
         <label>理由
           <textarea name="reason" rows="3" placeholder="選填"></textarea>
         </label>
         <div class="actions">
-          <button type="submit" class="btn primary">送出</button>
+          <button type="submit" id="leave-send" class="btn primary">送出</button>
           <button type="reset" class="btn">清除</button>
         </div>
         <p id="form-msg" class="msg" hidden></p>
@@ -163,6 +163,6 @@
     </section>
   </main>
 
-  <script src="./app.js"></script>
+  <script src="index.js"></script>
 </body>
 </html>

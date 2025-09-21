@@ -26,7 +26,7 @@ db.serialize(() => {
 
   // Insert sample staff
   const staff = [
-    ['EMP001', 'John', 'Doe', 'john.doe@company.com', '2020-01-15', 'Senior Engineer', 'Engineering', 85000, '555-0101', null],
+    ['user001', 'John', 'Doe', 'john.doe@company.com', '2020-01-15', 'Senior Engineer', 'Engineering', 85000, '555-0101', null],
     ['EMP002', 'Jane', 'Smith', 'jane.smith@company.com', '2019-03-20', 'Marketing Manager', 'Marketing', 75000, '555-0102', 'EMP001'],
     ['EMP003', 'Bob', 'Johnson', 'bob.johnson@company.com', '2021-06-10', 'HR Specialist', 'Human Resources', 65000, '555-0103', 'EMP002'],
     ['EMP004', 'Alice', 'Williams', 'alice.w@company.com', '2022-02-28', 'Financial Analyst', 'Finance', 70000, '555-0104', 'EMP001'],

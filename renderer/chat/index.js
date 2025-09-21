@@ -54,7 +54,7 @@ send_btn.addEventListener('click', async (event) => {
     appendMessage(userMessage, true);
     input_div.value = '';
 
-    // Call Groq
+    // Call API
     appendSkeleton();
     await window.electronAPI.messageToAi(userMessage)
         .then((assistantMessage) => {
@@ -65,7 +65,7 @@ send_btn.addEventListener('click', async (event) => {
             }
         })
         .catch((err) => {
-            console.error('Error from Groq:', err);
+            console.error('Error:', err);
             deleteSkeleton();
             appendMessage('抱歉，無法取得回覆。請稍後再試。', false);
         });

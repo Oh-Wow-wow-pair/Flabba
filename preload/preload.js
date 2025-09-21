@@ -13,7 +13,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return await ipcRenderer.invoke('message-to-ai', message);
   },
   showInstachatAtPet: () => ipcRenderer.invoke('show-instachat-at-pet'),
-  
+  sendLeaveData: (callback) => ipcRenderer.on('send-leave-data', (callback)),
+
   // 新增：顯示原生右鍵選單
   showContextMenu: () => ipcRenderer.invoke('show-context-menu'),
 
