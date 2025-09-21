@@ -6,7 +6,7 @@ require('dotenv').config();
 
 let messageCount = 0;
 let conversationID = '';
-const { watchFrontmostApp, isDesktopProcess } = require('./macFrontmost');
+
 const { initNotify, sendNotification, scheduleDailyNoonNotification, scheduleDailyCheckoutNotification } = require('./notify');
 
 let petWindow, chatWindow, instachatWindow, infoWindow;
@@ -19,20 +19,25 @@ let focusWatcher = null; // 焦點監聽器
 function startFocusWatcher() {
   if (focusWatcher) return; // 避免重複啟動
   
-  focusWatcher = watchFrontmostApp((appName) => {
-    console.log('前台應用切換到:', appName);
-    
-    // 如果焦點切到其他應用（非我們的桌寵應用）
-    if (appName && appName !== 'Electron' && petWindow) {
-      // 通知渲染進程焦點已切換
-      petWindow.webContents.send('focus-changed', appName);
+  // 只在macOS上啟動焦點監聽
+  if (watchFrontmostApp && process.platform === 'darwin') {
+    focusWatcher = watchFrontmostApp((appName) => {
+      console.log('前台應用切換到:', appName);
       
-      // 如果是桌面相關程序，額外處理
-      if (isDesktopProcess(appName)) {
-        petWindow.webContents.send('desktop-focused');
+      // 如果焦點切到其他應用（非我們的桌寵應用）
+      if (appName && appName !== 'Electron' && petWindow) {
+        // 通知渲染進程焦點已切換
+        petWindow.webContents.send('focus-changed', appName);
+        
+        // 如果是桌面相關程序，額外處理
+        if (isDesktopProcess && isDesktopProcess(appName)) {
+          petWindow.webContents.send('desktop-focused');
+        }
       }
-    }
-  }, 300); // 每300ms檢查一次
+    });
+  } else {
+    console.log('Focus watching not available on this platform');
+  }
 }
 
 // 創建右鍵選單
@@ -115,7 +120,7 @@ function updateInstachatPosition() {
 }
 
 function createPetWindow() {
-  petWindow = new BrowserWindow({
+  const windowOptions = {
     width: 128,
     height: 128,
     x: 100,
@@ -127,16 +132,30 @@ function createPetWindow() {
     hasShadow: false,
     skipTaskbar: true,
     focusable: true,
-    acceptFirstMouse: true, // macOS: 允許第一次點擊就啟動
     movable: true, // 允許程式式移動視窗位置
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true,
       backgroundThrottling: false
     }
-  });
+  };
 
-  petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
+  // macOS 特定設置
+  if (process.platform === 'darwin') {
+    windowOptions.acceptFirstMouse = true; // macOS: 允許第一次點擊就啟動
+  }
+
+  petWindow = new BrowserWindow(windowOptions);
+
+  // 跨平台兼容：只在macOS上設置 setVisibleOnAllWorkspaces
+  if (process.platform === 'darwin') {
+    try {
+      petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
+    } catch (error) {
+      console.warn('setVisibleOnAllWorkspaces not supported on this platform:', error.message);
+    }
+  }
+
   petWindow.loadFile(path.join(__dirname, '../renderer/pet/index.html'));
   
   // 監聽視窗位置變化，防止被系統移動到螢幕外
@@ -468,11 +487,24 @@ ipcMain.handle('force-reset-mouse-state', () => {
 
 ipcMain.handle('toggle-mouse-through', (_e, ignore) => {
   if (petWindow) {
-    if (ignore) {
-      petWindow.setIgnoreMouseEvents(true, { forward: true });
-    } else {
-      petWindow.setIgnoreMouseEvents(false);
-      petWindow.focus();
+    try {
+      if (ignore) {
+        petWindow.setIgnoreMouseEvents(true, { forward: true });
+      } else {
+        petWindow.setIgnoreMouseEvents(false);
+        // Windows平台可能需要額外的焦點處理
+        if (process.platform === 'win32') {
+          setTimeout(() => {
+            if (petWindow && !petWindow.isDestroyed()) {
+              petWindow.focus();
+            }
+          }, 10);
+        } else {
+          petWindow.focus();
+        }
+      }
+    } catch (error) {
+      console.error('Mouse event handling error:', error);
     }
   }
 });
@@ -522,18 +554,25 @@ ipcMain.handle('show-context-menu', (event) => {
   updatePetPauseState(); // 選單開啟時暫停桌寵
   
   const menu = createContextMenu();
-  menu.popup({ 
-    window: petWindow,
-    callback: () => {
-      // 選單關閉時通知渲染進程並恢復桌寵狀態
-      isContextMenuOpen = false;
-      updatePetPauseState();
-      
-      if (petWindow) {
-        petWindow.webContents.send('context-menu-closed');
+  
+  try {
+    menu.popup({ 
+      window: petWindow,
+      callback: () => {
+        // 選單關閉時通知渲染進程並恢復桌寵狀態
+        isContextMenuOpen = false;
+        updatePetPauseState();
+        if (petWindow) {
+          petWindow.webContents.send('context-menu-closed');
+        }
       }
-    }
-  });
+    });
+  } catch (error) {
+    console.error('Context menu error:', error);
+    // 如果選單顯示失敗，重置狀態
+    isContextMenuOpen = false;
+    updatePetPauseState();
+  }
 });
 
 ipcMain.handle('notify', (_event, payload) => {
