@@ -334,7 +334,7 @@ async function generateQuery(staff, message) {
   if (messageCount == 0) {
     messageCount++;
 
-    query += `My name is ${staff.first_name} ${staff.last_name}, I work in the ${staff.dept_name} department as a ${staff.job_title}. My email is ${staff.email} and my phone number is ${staff.phone}. I was hired on ${staff.hire_date} and my current salary is $${staff.salary}. My employment status is ${staff.status}. Here is my question: `;
+    query += `My name is ${staff.first_name} ${staff.last_name}, my emplyee ID is ${staff.staff_id}. I work in the ${staff.dept_name} department as a ${staff.job_title}. My email is ${staff.email} and my phone number is ${staff.phone}. I was hired on ${staff.hire_date} and my current salary is $${staff.salary}. My employment status is ${staff.status}. Here is my question: `;
   }
 
   query += `${message}`;
@@ -342,7 +342,7 @@ async function generateQuery(staff, message) {
 }
 
 async function messageToAi(message) {
-  let staff = await getSingleStaff('EMP001');
+  let staff = await getSingleStaff('user001');
   let query = await generateQuery(staff, message);
 
   let body = {
@@ -371,7 +371,10 @@ async function messageToAi(message) {
     }) 
     .then(response => response.json())
     .then(data => {
-      // print the type of data
+      conversationID = data.conversation_id;
+      return JSON.parse(data.answer);
+    })
+    .then(answer => {
       const md = markdownit({
         html: true,
         breaks: true,
@@ -379,11 +382,27 @@ async function messageToAi(message) {
         typographer: true,
       });
 
-      conversationID = data.conversation_id;
+      let leaveData = {
+        name: "John Doe",
+        id: "user001",
+        department: "工程部",
+        type: "病假",
+        startDate: new Date(2025, 10, 1),
+        endDate: new Date(2025, 10, 2),
+        reason: "",
+      };
+      sendLeaveDataToRenderer(leaveData);
 
-      console.log(md.render(data.answer));
-      return md.render(data.answer); // Converts markdown to HTML
+      return md.render(answer.response);
     });
+}
+
+function sendLeaveDataToRenderer(leaveData) {
+  if (leaveWindow && !leaveWindow.isDestroyed() && !leaveWindow.isVisible()) {
+    leaveWindow.show();
+  }
+
+  leaveWindow.webContents.send('send-leave-data', leaveData);
 }
 
 function toggleLeaveWindow() {
@@ -492,6 +511,9 @@ app.whenReady().then(() => {
   createChatWindow();
   createInstachatWindow();
 
+  createLeaveWindow();
+  leaveWindow.hide();
+
   // 啟動焦點監聽器
   startFocusWatcher();
 
@@ -529,6 +551,19 @@ app.whenReady().then(() => {
     // 如需一起切換 instachat，可打開下一行：
     // toggleInstachatWindow();
   });
+
+  // globalShortcut.register('Alt+Q', () => {
+  //   sendLeaveDataToRenderer({
+  //     name: "John Doe",
+  //     id: "user001",
+  //     department: "工程部",
+  //     type: "病假",
+  //     startDate: new Date(2025, 9, 21),
+  //     endDate: new Date(2025, 9, 22),
+  //     reason: "",
+  //   });
+  // });
+
 });
 
 // IPC handlers
