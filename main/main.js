@@ -9,6 +9,19 @@ let conversationID = '';
 
 const { initNotify, sendNotification, scheduleDailyNoonNotification, scheduleDailyCheckoutNotification } = require('./notify');
 
+// 嘗試引入 macOS 焦點監聽功能（如果存在）
+let watchFrontmostApp = null;
+let isDesktopProcess = null;
+try {
+  if (process.platform === 'darwin') {
+    const macFrontmost = require('./macFrontmost');
+    watchFrontmostApp = macFrontmost.watchFrontmostApp;
+    isDesktopProcess = macFrontmost.isDesktopProcess;
+  }
+} catch (error) {
+  console.log('macFrontmost module not available:', error.message);
+}
+
 let petWindow, chatWindow, instachatWindow, infoWindow;
 let isPetPaused = false; // 追蹤桌寵暫停狀態
 let isContextMenuOpen = false; // 追蹤右鍵選單狀態
@@ -128,7 +141,7 @@ function createPetWindow() {
     frame: false,
     transparent: true,
     resizable: false,
-    alwaysOnTop: false,
+    alwaysOnTop: true,      // 改為置頂，確保能接收事件
     hasShadow: false,
     skipTaskbar: true,
     focusable: true,
@@ -244,6 +257,7 @@ function createInstachatWindow() {
     transparent: true,
     resizable: false,
     skipTaskbar: true,
+    alwaysOnTop: false,      // 設置為不置頂，避免遮擋桌寵
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true
