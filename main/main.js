@@ -172,7 +172,7 @@ function createPetWindow() {
     frame: false,
     transparent: true,
     resizable: false,
-    alwaysOnTop: true,      // 改為置頂，確保能接收事件
+    alwaysOnTop: false,      // 改為置頂，確保能接收事件
     hasShadow: false,
     skipTaskbar: true,
     focusable: true,
