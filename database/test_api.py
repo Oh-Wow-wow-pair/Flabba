@@ -49,24 +49,46 @@ def quick_test():
         else:
             print(f"❌ 前端查詢失敗 ({response.status_code})")
         
-        # 4. 請假記錄測試
-        print("\n4️⃣ 請假記錄測試...")
-        leave_data = {
+        # 4. 請假記錄測試 - 特休假
+        print("\n4️⃣ 請假記錄測試 - 特休假...")
+        annual_leave_data = {
             "user_id": "quick_test_user",
-            "leave_type": "annual_leave",
+            "leave_type": "annual_leave",  # 特休假
             "start_date": "2025-09-25",
             "end_date": "2025-09-25",
             "days": 1,
-            "reason": "快速測試請假"
+            "reason": "快速測試特休假"
         }
-        response = requests.post(f"{BASE_URL}/api/leave/record", json=leave_data)
+        response = requests.post(f"{BASE_URL}/api/leave/record", json=annual_leave_data)
         if response.status_code == 200:
             result = response.json()
             leave_record = result.get('leave_record', {})
             remaining = leave_record.get('remaining_leave_days', 0)
-            print(f"✅ 請假記錄成功，剩餘特休: {remaining} 天")
+            annual_deducted = result.get('annual_leave_deducted', False)
+            print(f"✅ 特休假記錄成功，剩餘特休: {remaining} 天 (扣除: {annual_deducted})")
         else:
-            print(f"❌ 請假記錄失敗 ({response.status_code})")
+            print(f"❌ 特休假記錄失敗 ({response.status_code})")
+        
+        # 4b. 請假記錄測試 - 病假 (不應該扣特休)
+        print("\n4b️⃣ 請假記錄測試 - 病假...")
+        sick_leave_data = {
+            "user_id": "quick_test_user",
+            "leave_type": "sick_leave",  # 病假
+            "start_date": "2025-09-26",
+            "end_date": "2025-09-26", 
+            "days": 1,
+            "reason": "身體不適"
+        }
+        response = requests.post(f"{BASE_URL}/api/leave/record", json=sick_leave_data)
+        if response.status_code == 200:
+            result = response.json()
+            annual_deducted = result.get('annual_leave_deducted', True)
+            if not annual_deducted:
+                print("✅ 病假記錄成功，正確不扣除特休")
+            else:
+                print("⚠️ 病假處理有誤，不應該扣除特休")
+        else:
+            print(f"❌ 病假記錄失敗 ({response.status_code})")
         
         # 5. 最終驗證
         print("\n5️⃣ 最終驗證...")
@@ -76,10 +98,12 @@ def quick_test():
             final_leave = result.get('data', {}).get('value', 0)
             print(f"✅ 最終特休天數: {final_leave} 天")
             
-            if final_leave == 14:  # 15 - 1 = 14
+            if final_leave == 14:  # 15 - 1 (只有特休假扣除) = 14
                 print("🎉 所有功能運作正常！")
+                print("   ✓ 特休假正確扣除特休天數")
+                print("   ✓ 病假正確不扣除特休天數")
             else:
-                print("⚠️ 特休天數計算可能有誤")
+                print(f"⚠️ 特休天數計算可能有誤，預期 14 天，實際 {final_leave} 天")
         else:
             print(f"❌ 最終驗證失敗 ({response.status_code})")
         
