@@ -26,7 +26,7 @@ async function messageToAi(message) {
 
   let body = {
     inputs: {},
-    response_mode: 'streaming',
+    response_mode: 'blocking',
     auto_generate_name: true,
     user: 'flabba-pet',
     query: query,
@@ -36,7 +36,7 @@ async function messageToAi(message) {
   console.log('Sending message to AI:', message);
   console.log('Request body:', JSON.stringify(body, null, 2));
 
-  // DIFY API call with streaming support
+  // DIFY API call
   return await fetch('https://api.dify.ai/v1/chat-messages', {
       method: 'POST',
       headers: {
@@ -53,54 +53,11 @@ async function messageToAi(message) {
         console.error('API error response:', errorText);
         throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
       }
-
-      // 處理流式響應
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let fullAnswer = '';
-      let conversationId = '';
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const jsonStr = line.slice(6).trim();
-              if (jsonStr === '[DONE]') {
-                break;
-              }
-
-              try {
-                const data = JSON.parse(jsonStr);
-                console.log('Streaming data:', data);
-
-                // Agent Chat App 使用 'agent_message' 事件
-                if (data.event === 'agent_message') {
-                  fullAnswer += data.answer || '';
-                  conversationId = data.conversation_id || conversationId;
-                } else if (data.event === 'message_end') {
-                  conversationId = data.conversation_id || conversationId;
-                }
-              } catch (parseError) {
-                console.warn('Failed to parse streaming data:', jsonStr);
-              }
-            }
-          }
-        }
-      } finally {
-        reader.releaseLock();
-      }
-
-      // 更新對話 ID
-      if (conversationId) {
-        conversationID = conversationId;
-      }
-
+      return response.json();
+    })
+    .then(data => {
+      console.log('API response data:', data);
+      
       const md = markdownit({
         html: true,
         breaks: true,
@@ -108,15 +65,16 @@ async function messageToAi(message) {
         typographer: true,
       });
 
-      // 檢查是否有回答內容
-      if (!fullAnswer) {
-        console.error('No answer received from streaming response');
-        return '抱歉，AI 服務返回了空的響應。';
+      // 檢查數據是否有效
+      if (!data || typeof data.answer !== 'string') {
+        console.error('Invalid API response structure:', data);
+        return '抱歉，AI 服務返回了無效的響應。';
       }
 
-      console.log('Full answer:', fullAnswer);
-      console.log('Rendered markdown:', md.render(fullAnswer));
-      return md.render(fullAnswer); // Converts markdown to HTML
+      conversationID = data.conversation_id || conversationID;
+
+      console.log('Rendered markdown:', md.render(data.answer));
+      return md.render(data.answer); // Converts markdown to HTML
     })
     .catch((error) => {
       console.error('AI chat error:', error);
