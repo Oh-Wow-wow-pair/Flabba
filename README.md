@@ -1,6 +1,6 @@
 # Flabba Desktop Pet
 
-A transparent, draggable desktop pet with hand-drawn (handwriting picture) PNG animations, a minimal chat/insta-chat UI, daily notifications, and an optional backend database that can fetch user data. The AI assistant is grounded by a small RAG corpus to limit domain-specific information.
+A transparent, draggable desktop pet with hand-drawn (handwriting picture) PNG animations, a minimal chat/insta-chat UI, daily notifications, and an optional backend database that can fetch user data. The AI assistant is grounded by a small RAG corpus to limit domain-specific information.  
 [Deep Wiki](https://deepwiki.com/Oh-Wow-wow-pair/Flabba)
 
 ## Quick Start
